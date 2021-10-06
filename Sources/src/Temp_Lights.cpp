@@ -1,5 +1,5 @@
 #include "Temp_Lights.h"
-#include <exception>
+#include <stdexcept>
 
 
 Temp_Lights::Temp_Lights(uint32_t numberOfLights) : lightsBuffer{ numberOfLights * sizeof(light), GL_DYNAMIC_DRAW }
@@ -13,13 +13,12 @@ void Temp_Lights::update(double deltaTime)
     f += deltaTime * 0.1;
 
     uint32_t uniformBlockBinding = 3;
-    //861
     lightsBuffer.bind(GL_UNIFORM_BUFFER);
-    light* l = (light*)lightsBuffer.mapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY | GL_MAP_INVALIDATE_BUFFER_BIT);
+    light* l = (light*)lightsBuffer.mapBuffer(GL_UNIFORM_BUFFER, GL_READ_WRITE | GL_MAP_INVALIDATE_BUFFER_BIT);
     if (!l) {
-        throw std::exception("Temp_Lights error during update function: mapping buffer failed");
+        throw std::runtime_error("Temp_Lights error during update function: mapping buffer failed");
     }
-    for (int i = 0; i < numberOfLights; i++)
+    for (int i = 0; i < int(numberOfLights); i++)
     {
 
         float fi = (float)i / 128.0f;
@@ -27,7 +26,7 @@ void Temp_Lights::update(double deltaTime)
         //l[i].position = glm::vec3(-20.0, 20.0, -20.0);
         l[i].color = glm::vec3(1.0);
 
-        l[i].radius = 100.;
+        l[i].radius = 300.;
     }
 
     lightsBuffer.unMap(GL_UNIFORM_BUFFER);

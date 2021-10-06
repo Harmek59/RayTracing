@@ -1,6 +1,10 @@
 #include "CoreEngine.h"
 #include "GLFWCallbacks.h"
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 void CoreEngine::createCoreEngine(){
     oglHandler = std::unique_ptr<OpenGLHandler>(
         new OpenGLHandler(oglVersionMajor, oglVersionMinor, windowWidth, windowHeight, title));
@@ -10,6 +14,14 @@ void CoreEngine::createCoreEngine(){
 
     if (mouseCaptured)
         glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void) io;
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(CoreEngine::getWindow(), true);
+    ImGui_ImplOpenGL3_Init("#version 430");
 }
 
 bool CoreEngine::checkIfMainLoopShouldBreak(){
@@ -79,21 +91,21 @@ void CoreEngine::preFrameLogic(){
  
     processInput();    
 
-    glClearColor(0.4f, 0.4f, 0.9f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 }
 
 void CoreEngine::postFrameLogic(){
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
     CoreEngine::swapBuffers();
     CoreEngine::pollEvents();
-}
-
-void CoreEngine::printFrameLogs(){
-    std::cout<<"\n============================================"<<std::endl;
-    std::cout<<"FPS: "<<frameCounter.getFPS()<<std::endl;
-    std::cout<<"Camera position: "<<getCamera().getPosition().x<<" "<<getCamera().getPosition().y<<" "<<getCamera().getPosition().z<<std::endl;
-    std::cout<<"OpenGL errors: "<<glGetError()<<std::endl;
-    std::cout<<"YAW: "<<getCamera().yaw<<"; PITCH: "<<getCamera().pitch<<"; ROLL: "<<getCamera().roll<<std::endl;
 }
 
 float CoreEngine::getDeltaTime(){

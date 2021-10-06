@@ -1,0 +1,661 @@
+#version 430
+
+// triangle test 2000  23fps
+
+uniform int MODE = 0;// 0 - classic check, // 1 - you can set how many times function will be called
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(rgba32f, binding = 0) uniform image2D img_color;
+
+layout (binding = 3, offset = 0) uniform atomic_uint triangesTest;
+layout (binding = 3, offset = 4) uniform atomic_uint cellsTest;
+layout (binding = 3, offset = 8) uniform atomic_uint boxesTest;
+
+
+layout (binding = 5) uniform SCENE_DATA{
+    int recursionDepth;
+    int numberOfLights;
+};
+
+
+uniform mat4 viewMatrix;
+uniform vec3 cameraPosition;
+
+uniform int imageWidth = 1280;
+uniform int imageHeight = 720;
+
+uniform float fov = 45.;
+
+struct Material{
+    vec3 albedo;
+    vec3 specular;
+};
+
+Material materials[5];
+
+
+ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+
+float INFINITY = 1.0 / 0.0;
+//////////////////////
+struct Triangle{
+    uint vertexIndex0;
+    uint vertexIndex1;
+    uint vertexIndex2;
+    uint material;
+    uint normalIndex0;
+    uint normalIndex1;
+    uint normalIndex2;
+    uint offset;
+    uint textureCoordsIndex1;
+    uint textureCoordsIndex2;
+    uint textureCoordsIndex3;
+    uint offset2;
+};
+
+struct Vertex{
+    vec3 position;
+    uint offset;
+};
+uniform uint numberOfTrianglesFromMesh = 0;
+layout (std430, binding = 8) readonly buffer TRIANGLE
+{
+    Triangle triangles[];
+};
+
+layout (std430, binding = 9) readonly buffer VERTEX
+{
+    Vertex vertices[];
+};
+struct NormalsFromMesh{
+    vec3 normal;
+    uint offset;
+};
+layout (std430, binding = 7) readonly buffer NORMAL
+{
+    NormalsFromMesh normals[];
+};
+
+layout (std430, binding = 6) readonly buffer TEXTURE_COORDS
+{
+    vec2 texCoords[];
+};
+
+uniform int numberOfTriangleTestsToDo;
+uniform int numberOfCellTestsToDo;
+uniform int numberOfBoxTestsToDo;
+
+
+////////
+ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
+    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
+    idx = idx - int(z * gridResolution.x * gridResolution.y);
+    int y = int(float(idx) / float(gridResolution.x));
+    int x = int(mod(float(idx), float(gridResolution.x)));
+    return ivec3(x, y, z);
+}
+
+uint cells3DToIndex(ivec3 cords, ivec3 gridResolution){
+    return (cords.z * gridResolution.x * gridResolution.y) + (cords.y * gridResolution.x) + cords.x;
+
+}
+
+struct Cell {
+    uint beginOfTrianglesIndiciesArray;
+    uint endOfTrianglesIndiciesArray;
+};
+layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
+{
+    uint trianglesIndicesInGrid[];
+};
+
+layout (std430, binding = 11) readonly buffer CELLS
+{
+    Cell cells[];
+};
+
+struct GridData{
+    vec3 gridBegin;
+    uint cellsBeginIndex;
+    vec3 gridEnd;
+    uint cellsEndIndex;
+    ivec3 gridResolution;
+    int offset1;
+    vec3 cellSize;
+    int offset2;
+};
+
+//uniform int numberOfGrids = 7;
+layout (std430, binding = 12) readonly buffer GRIDSDATA
+{
+    GridData gridData[];
+};
+
+////////////////////
+struct Ray
+{
+    vec3 origin;
+    vec3 direction;
+    vec3 energy;
+};
+
+struct Sphere
+{
+    vec3 position;
+    float radius;
+    vec3 albedo;
+    uint material;
+    vec3 specular;
+};
+
+struct HitPoint
+{
+    vec3 position;
+    float dist;
+    vec3 normal;
+    uint material;
+    vec3 uvw;
+};
+
+struct Light
+{
+    vec3 position;
+    float offset1;
+    vec3 color;
+    float offset2;
+    vec3 offset3;
+    float radius;
+
+};
+
+uniform int numberOfSpheres = 10;
+layout (std140, binding = 1) uniform SPHERES
+{
+    Sphere      spheres[128];
+};
+
+layout (std140, binding = 3) uniform LIGHTS
+{
+    Light      lights[128];
+};
+
+
+
+
+Ray createFirstRay();
+
+vec3 shade(Ray ray, HitPoint bestHit);
+
+bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit);//return true if we hit and update bestHit only it it is closer
+
+HitPoint trace(Ray ray);
+
+void updateRay(inout Ray ray, HitPoint bestHit);
+
+bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox);
+
+void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit);
+
+vec3 barycentric(vec3 vert0, vec3 vert1, vec3 vert2, vec3 p){
+    vec3 uvw;
+    vec3 v0 = vert1 - vert0, v1 = vert2 - vert0, v2 = p - vert0;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    uvw.y = (d11 * d20 - d01 * d21) / denom;
+    uvw.z = (d00 * d21 - d01 * d20) / denom;
+    uvw.x = 1.0f - uvw.y - uvw.z;
+    return uvw;
+}
+
+bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit)
+{
+    atomicCounterIncrement(triangesTest);
+    //https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+    const float EPSILON = 0.0000001;
+    vec3 vertex0 = vertices[triangle.vertexIndex0].position;
+    vec3 vertex1 = vertices[triangle.vertexIndex1].position;
+    vec3 vertex2 = vertices[triangle.vertexIndex2].position;
+    vec3 edge1, edge2, h, s, q;
+    float a, f, u, v;
+    edge1 = vertex1 - vertex0;
+    edge2 = vertex2 - vertex0;
+    //back face culling
+    vec3 N = cross(edge1, edge2);
+    //    if(dot(ray.direction, N) > 0){
+    //        return false;
+    //    }
+    //
+
+    h = cross(ray.direction, edge2);
+    a = dot(edge1, h);
+    if (a > -EPSILON && a < EPSILON)
+    return false;// This ray is parallel to this triangle.
+    f = 1.0/a;
+    s = ray.origin - vertex0;
+    u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0)
+    return false;
+    q = cross(s, edge1);
+    v = f * dot(ray.direction, q);
+    if (v < 0.0 || u + v > 1.0)
+    return false;
+    // At this stage we can compute t to find out where the intersection point is on the line.
+    float t = f * dot(edge2, q);
+
+    HitPoint hit;
+    hit.dist = t;
+    hit.position = ray.origin + t * ray.direction;
+    vec3 bary = barycentric(vertex0, vertex1, vertex2, bestHit.position);
+    hit.normal = bary.x * normals[triangle.normalIndex0].normal + bary.y *
+    normals[triangle.normalIndex1].normal + bary.z * normals[triangle.normalIndex2].normal;
+    hit.normal = dot(ray.direction, N) > 0 ? hit.normal : -hit.normal;
+    hit.material = triangle.material;
+
+    if(t>EPSILON && t < bestHit.dist){
+        bestHit = hit;
+        return true;
+    }
+    return false;
+}
+
+void main()
+{
+
+    if (MODE == 0){
+        materials[0].specular = vec3(0.2);
+        materials[0].albedo = vec3(0.7, 0.7, 0.7);
+
+        materials[1].specular = vec3(0.1);
+        materials[1].albedo = vec3(1.0, 0.0, 0.0);
+        materials[2].specular = vec3(0.1);
+        materials[2].albedo = vec3(0.0, 1.0, 0.0);
+        materials[3].specular = vec3(0.9);
+        materials[3].albedo = vec3(0.0, 0.0, 1.0);
+        materials[4].specular = vec3(0.1);
+        materials[4].albedo = vec3(1.0, 0.0, 0.1);
+
+        Ray ray = createFirstRay();
+
+        vec3 color = vec3(0.0, 0.0, 0.0);
+
+        for (int recursion = 0; recursion < recursionDepth; recursion++){
+
+            HitPoint hit = trace(ray);
+            updateRay(ray, hit);
+            color += shade(ray, hit)* ray.energy;
+            ray.energy = ray.energy * materials[hit.material].specular;
+
+        }
+        imageStore(img_color, pixel_coords, vec4(color, 1.0));
+    } else if (MODE == 1){
+        Ray ray = createFirstRay();
+        HitPoint bestHit;
+
+        for (int i = 0; i<numberOfTriangleTestsToDo; i++){
+            intersectTriangle(ray, triangles[int(mod(i, float(triangles.length())))], bestHit);
+        }
+        for (int i = 0; i<numberOfCellTestsToDo; i++){
+            atomicCounterIncrement(cellsTest);
+
+            uint c = int(mod(i, float(cells.length())));
+            vec3 cell = vec3(1.0);
+            vec3 step = vec3(1.0);
+            vec3 exit = vec3(10.0);
+            vec3 deltaT = vec3(1.0);
+            GridData grid = gridData[c];
+            vec3 nextCrossingT = vec3(1., 0., 0.);
+            for (uint t = cells[c].beginOfTrianglesIndiciesArray; t < cells[c].endOfTrianglesIndiciesArray; t++){
+                uint j = trianglesIndicesInGrid[t];
+
+                vec3 cellBegin = vec3(cell) * grid.cellSize + grid.gridBegin;
+                vec3 cellEnd = vec3(cell + ivec3(1)) * grid.cellSize + grid.gridBegin;
+                                bool intersect = intersectTriangle(ray, triangles[j], bestHit);
+                bool isHitInCell = bestHit.position.x > cellBegin.x && bestHit.position.y > cellBegin.y && bestHit.position.z > cellBegin.z && bestHit.position.x < cellEnd.x && bestHit.position.y < cellEnd.y && bestHit.position.z < cellEnd.z;
+
+                vec3 cellPosition = vec3(cell) * grid.cellSize + grid.gridBegin + grid.cellSize/2.;
+                float distanceToCell = distance(ray.origin, cellPosition) - length(grid.cellSize/2.);
+
+                if (bestHit.dist < distanceToCell){
+                    return;
+                }
+            }
+
+            uint k = (int(nextCrossingT.x < nextCrossingT.y) << 2) +
+            (int(nextCrossingT.x < nextCrossingT.z) << 1) +
+            (int(nextCrossingT.y < nextCrossingT.z));
+            uint map[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+            uint axis = map[k];
+            if (axis == 0) {
+                cell.x += step.x;
+                if (cell.x == exit.x) ;;
+                nextCrossingT.x += deltaT.x;
+            } else if (axis == 1){
+                cell.y += step.y;
+                if (cell.y == exit.y) ;;
+                nextCrossingT.y += deltaT.y;
+            } else if (axis == 2){
+                cell.z += step.z;
+                if (cell.z == exit.z)   ;;
+                nextCrossingT.z += deltaT.z;
+            }
+            ray.origin.x = k;
+
+        }
+        for (int i = 0; i<numberOfBoxTestsToDo; i++){
+            int index = int(mod(i, float(gridData.length())));
+            float tHitBox;
+            intersectBox(ray, gridData[index].gridBegin, gridData[index].gridEnd, tHitBox);
+            ray.origin.x = tHitBox;
+        }
+    }
+
+
+}
+
+bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit)
+{
+    vec3 v = ray.origin - sphere.position;
+    float B = 2.0 * dot(ray.direction, v);
+    float C = dot(v, v) - sphere.radius * sphere.radius;
+    float B2 = B * B;
+
+    float f = B2 - 4.0 * C;
+
+    if (f < 0.0)
+    return false;
+
+    f = sqrt(f);
+    float t0 = -B + f;
+    float t1 = -B - f;
+    float t = min(max(t0, 0.0), max(t1, 0.0)) * 0.5;
+
+    if (t == 0.0)
+    return false;
+
+    if (t < bestHit.dist){
+        bestHit.dist = t;
+        bestHit.position = ray.origin + t * ray.direction;
+        bestHit.normal = normalize(bestHit.position - sphere.position);
+        bestHit.material = sphere.material;
+    }
+
+
+    return true;
+}
+
+
+Ray createFirstRay()
+{
+    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+    pixel_coords = ivec2(ivec2(gl_GlobalInvocationID.x, imageHeight-1 - gl_GlobalInvocationID.y));
+
+    float fov_scale = tan(radians(fov)/2.);
+    float imageAspectRatio = float(imageWidth)/ float(imageHeight);
+
+    float pixelCamera_x = (2. * (pixel_coords.x + 0.5) / float(imageWidth) - 1.) * imageAspectRatio * fov_scale;
+    float pixelCamera_y = (1. - 2. * (pixel_coords.y + 0.5) / float(imageHeight)) * fov_scale;
+
+    vec3 position = cameraPosition;
+    vec3 direction = (viewMatrix * vec4(vec3(pixelCamera_x, pixelCamera_y, -1.), 1.0)).xyz;
+
+    direction = normalize(direction - position);//subtrack cameraPosition because we have position saved in position variable and adding position of camera to direction would mess up direcion vectors
+
+    Ray ray;
+    ray.direction = direction;
+    ray.origin = position;
+    ray.energy = vec3(1.0, 1.0, 1.0);
+    return ray;
+}
+
+HitPoint trace(Ray ray)
+{
+    HitPoint bestHit;
+    bestHit.dist = INFINITY;
+
+    for (int i = 0; i<gridData.length(); i++){
+        float tHitBox;
+        if (intersectBox(ray, gridData[i].gridBegin, gridData[i].gridEnd, tHitBox))
+        {
+            if (tHitBox < bestHit.dist){
+                DDA(ray, gridData[i], tHitBox, bestHit);
+            }
+        }
+    }
+
+    for (uint i = 0; i<numberOfSpheres; ++i)
+    {
+        intersectRaySphere(ray, spheres[i], bestHit);
+    }
+
+
+    return bestHit;
+}
+
+void updateRay(inout Ray ray, HitPoint bestHit){
+    if (bestHit.dist < INFINITY)
+    {
+
+
+        if (bestHit.material == 3){
+            ray.origin = bestHit.position - bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
+            // shadow-acne !
+            ray.direction = normalize(refract(ray.direction, bestHit.normal, 0.6));
+        } else {
+            ray.origin = bestHit.position + bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
+            // shadow-acne !
+            ray.direction = normalize(reflect(ray.direction, bestHit.normal));
+        }
+    }
+}
+
+vec3 shade(Ray ray, HitPoint bestHit){
+    if (bestHit.dist < INFINITY)
+    {
+
+        vec3 color = materials[bestHit.material].albedo / 20.;
+
+        Ray shadowRay;
+
+        vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
+        float lightIntensity = 0.8;
+
+        shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+        shadowRay.direction = -directionalLight;
+        HitPoint shadowHit = trace(shadowRay);
+        if (!(shadowHit.dist < INFINITY))
+        color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
+
+
+        for (int i = 0; i<numberOfLights; ++i){
+            float dist = length(bestHit.position - lights[i].position);
+            if (dist < lights[i].radius){
+                Ray shadowRay;
+                shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+                shadowRay.direction = normalize(lights[i].position - bestHit.position);
+                HitPoint shadowHit = trace(shadowRay);
+
+                vec3 V = normalize(-bestHit.position);
+                vec3 L = normalize(lights[i].position - bestHit.position);
+                vec3 N = bestHit.normal;
+                vec3 R = reflect(-L, N);
+
+                float rim = clamp(dot(N, V), 0.0, 1.0);
+                rim = smoothstep(0.0, 1.0, 1.0 - rim);
+                float diff = clamp(dot(N, L), 0.0, 1.0);
+                float spec = pow(clamp(dot(R, N), 0.0, 1.0), 260.0);
+
+                //                vec3 rim_color = vec3(0.0); // , 0.2, 0.2);
+                //                vec3 diff_color = vec3(0.125); // , 0.8, 0.8);
+                vec3 rim_color = vec3(0.0, 0.2, 0.2);
+                vec3 diff_color = vec3(0.125, 0.8, 0.8);
+                vec3 spec_color = vec3(0.1);
+
+                if (!(shadowHit.dist < dist))
+                color += (rim_color * rim + diff_color * diff + spec_color * spec) * (1.-(dist/lights[i].radius));
+
+            }
+        }
+
+        return color * materials[bestHit.material].albedo + vec3(0.1);
+
+
+    }
+    else
+    {
+        return vec3(0.0);
+        return vec3(0.1, 0.1, 0.5);
+    }
+}
+
+bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox)
+{
+    atomicCounterIncrement(boxesTest);
+    float tmin = (boxMin.x - ray.origin.x) / ray.direction.x;
+    float tmax = (boxMax.x - ray.origin.x) / ray.direction.x;
+
+    if (tmin > tmax) {
+        float temp = tmin;
+        tmin = tmax;
+        tmax = temp;
+    }
+
+    float tymin = (boxMin.y - ray.origin.y) / ray.direction.y;
+    float tymax = (boxMax.y - ray.origin.y) / ray.direction.y;
+
+    if (tymin > tymax){
+        float temp = tymin;
+        tymin = tymax;
+        tymax = temp;
+    }
+
+    if ((tmin > tymax) || (tymin > tmax))
+    return false;
+
+    if (tymin > tmin)
+    tmin = tymin;
+
+    if (tymax < tmax)
+    tmax = tymax;
+
+    float tzmin = (boxMin.z - ray.origin.z) / ray.direction.z;
+    float tzmax = (boxMax.z - ray.origin.z) / ray.direction.z;
+
+    if (tzmin > tzmax){
+        float temp = tzmin;
+        tzmin = tzmax;
+        tzmax = temp;
+    }
+
+    if ((tmin > tzmax) || (tzmin > tmax))
+    return false;
+
+    if (tzmin > tmin)
+    tmin = tzmin;
+
+    if (tzmax < tmax)
+    tmax = tzmax;
+
+    tHitBox = tmin;
+
+    return true;
+}
+
+void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit){
+    vec3 deltaT, nextCrossingT;
+    ivec3 exit, step, cell;
+
+    vec3 rayOrigCell =  (ray.origin + ray.direction * tHitBox) - grid.gridBegin;
+    //    cell.x = int(clamp(floor(float(rayOrigCell.x) / grid.cellSize.x), 0, grid.gridResolution.x - 1));
+    //    cell.y = int(clamp(floor(float(rayOrigCell.y) / grid.cellSize.y), 0, grid.gridResolution.y - 1));
+    //    cell.z = int(clamp(floor(float(rayOrigCell.z) / grid.cellSize.z), 0, grid.gridResolution.z - 1));
+
+    cell = clamp(ivec3(floor(rayOrigCell / grid.cellSize)), ivec3(0), grid.gridResolution - ivec3(1));
+
+
+    if (ray.direction.x < 0){
+        deltaT.x = - grid.cellSize.x / ray.direction.x;
+        nextCrossingT.x = tHitBox + (cell.x * grid.cellSize.x - rayOrigCell.x) / ray.direction.x;
+        exit.x = -1;
+        step.x = -1;
+    } else {
+        deltaT.x = grid.cellSize.x / ray.direction.x;
+        nextCrossingT.x = tHitBox + ((cell.x + 1) * grid.cellSize.x - rayOrigCell.x) / ray.direction.x;
+        exit.x = grid.gridResolution.x;
+        step.x = 1;
+    }
+    if (ray.direction.y < 0){
+        deltaT.y = - grid.cellSize.y / ray.direction.y;
+        nextCrossingT.y = tHitBox + (cell.y * grid.cellSize.y - rayOrigCell.y) / ray.direction.y;
+        exit.y = -1;
+        step.y = -1;
+    } else {
+        deltaT.y = grid.cellSize.y / ray.direction.y;
+        nextCrossingT.y = tHitBox + ((cell.y + 1) * grid.cellSize.y - rayOrigCell.y) / ray.direction.y;
+        exit.y = grid.gridResolution.y;
+        step.y = 1;
+    }
+    if (ray.direction.z < 0){
+        deltaT.z = - grid.cellSize.z / ray.direction.z;
+        nextCrossingT.z = tHitBox + (cell.z * grid.cellSize.z - rayOrigCell.z) / ray.direction.z;
+        exit.z = -1;
+        step.z = -1;
+    } else {
+        deltaT.z = grid.cellSize.z / ray.direction.z;
+        nextCrossingT.z = tHitBox + ((cell.z + 1) * grid.cellSize.z - rayOrigCell.z) / ray.direction.z;
+        exit.z = grid.gridResolution.z;
+        step.z = 1;
+    }
+
+    while (true){
+
+        atomicCounterIncrement(cellsTest);
+
+        uint o = cell.z * grid.gridResolution.x * grid.gridResolution.y + cell.y * grid.gridResolution.x+cell.x;
+        uint c = o + grid.cellsBeginIndex;//cells3DToIndex(cellIndex, grid.gridResolution);
+
+        for (uint t = cells[c].beginOfTrianglesIndiciesArray; t < cells[c].endOfTrianglesIndiciesArray; t++){
+            uint j = trianglesIndicesInGrid[t];
+
+            vec3 cellBegin = vec3(cell) * grid.cellSize + grid.gridBegin;
+            vec3 cellEnd = vec3(cell + ivec3(1)) * grid.cellSize + grid.gridBegin;
+            bool intersect = intersectTriangle(ray, triangles[j], bestHit);
+            bool isHitInCell = bestHit.position.x > cellBegin.x && bestHit.position.y > cellBegin.y && bestHit.position.z > cellBegin.z && bestHit.position.x < cellEnd.x && bestHit.position.y < cellEnd.y && bestHit.position.z < cellEnd.z;
+
+            vec3 cellPosition = vec3(cell) * grid.cellSize + grid.gridBegin + grid.cellSize/2.;
+            float distanceToCell = distance(ray.origin, cellPosition) - length(grid.cellSize/2.);
+
+            if (bestHit.dist < distanceToCell){
+                return;
+            }
+        }
+
+        uint k = (int(nextCrossingT.x < nextCrossingT.y) << 2) +
+        (int(nextCrossingT.x < nextCrossingT.z) << 1) +
+        (int(nextCrossingT.y < nextCrossingT.z));
+        uint map[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+        uint axis = map[k];
+        if (axis == 0) {
+            cell.x += step.x;
+            if (cell.x == exit.x) break;
+            nextCrossingT.x += deltaT.x;
+        } else if (axis == 1){
+            cell.y += step.y;
+            if (cell.y == exit.y) break;
+            nextCrossingT.y += deltaT.y;
+        } else if (axis == 2){
+            cell.z += step.z;
+            if (cell.z == exit.z) break;
+            nextCrossingT.z += deltaT.z;
+        }
+
+    }
+
+}
+
+
+

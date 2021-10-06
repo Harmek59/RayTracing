@@ -1,0 +1,706 @@
+#version 430
+
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(rgba32f, binding = 0) uniform image2D img_color;
+layout(binding = 1) uniform sampler2D shadowMap;
+
+
+layout (binding = 3) uniform sampler2D swordTexture;
+
+
+layout (binding = 5) uniform SCENE_DATA{
+    int recursionDepth;
+    int numberOfLights;
+    uint beginOfModelsAndGrids;
+    uint endOfModelsAndGrids;
+};
+
+
+uniform mat4 viewMatrix;
+uniform vec3 cameraPosition;
+
+uniform int imageWidth = 1280;
+uniform int imageHeight = 720;
+
+uniform float fov = 45.;
+
+uniform mat4 lightSpaceMatrix;
+
+struct Material{
+    vec3 albedo;
+    vec3 specular;
+};
+
+Material materials[6];
+
+
+ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+
+float INFINITY = 1.0 / 0.0;
+//////////////////////
+struct Triangle{
+    uint vertexIndex0;
+    uint vertexIndex1;
+    uint vertexIndex2;
+    uint material;
+    uint normalIndex0;
+    uint normalIndex1;
+    uint normalIndex2;
+    uint offset;
+    uint textureCoordsIndex1;
+    uint textureCoordsIndex2;
+    uint textureCoordsIndex3;
+    uint offset2;
+};
+
+struct Vertex{
+    vec3 position;
+    uint offset;
+};
+uniform uint numberOfTrianglesFromMesh = 0;
+layout (std430, binding = 8) readonly buffer TRIANGLE
+{
+    Triangle triangles[];
+};
+
+layout (std430, binding = 9) readonly buffer VERTEX
+{
+    Vertex vertices[];
+};
+struct NormalsFromMesh{
+    vec3 normal;
+    uint offset;
+};
+layout (std430, binding = 7) readonly buffer NORMAL
+{
+    NormalsFromMesh normals[];
+};
+
+layout (std430, binding = 6) readonly buffer TEXTURE_COORDS
+{
+    vec2 texCoords[];
+};
+
+
+////////
+ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
+    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
+    idx = idx - int(z * gridResolution.x * gridResolution.y);
+    int y = int(float(idx) / float(gridResolution.x));
+    int x = int(mod(float(idx), float(gridResolution.x)));
+    return ivec3(x, y, z);
+}
+
+uint cells3DToIndex(ivec3 cords, ivec3 gridResolution){
+    return (cords.z * gridResolution.x * gridResolution.y) + (cords.y * gridResolution.x) + cords.x;
+
+}
+
+struct Cell {
+    uint beginOfTrianglesIndiciesArray;
+    uint endOfTrianglesIndiciesArray;
+};
+layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
+{
+    uint trianglesIndicesInGrid[];
+};
+
+layout (std430, binding = 11) readonly buffer CELLS
+{
+    Cell cells[];
+};
+
+struct GridData{
+    vec3 gridBegin;
+    uint cellsBeginIndex;
+    vec3 gridEnd;
+    uint cellsEndIndex;
+    ivec3 gridResolution;
+    int offset1;
+    vec3 cellSize;
+    int offset2;
+};
+
+//uniform int numberOfGrids = 7;
+layout (std430, binding = 12) readonly buffer GRIDSDATA
+{
+    GridData gridData[];
+};
+
+struct ModelData{
+    mat4 positionMatrix;
+    mat4 rotationMatrix;
+    mat4 scaleMatrix;
+//    bool whetherToDraw;
+    mat4 whetherToDraw;
+};
+layout (std430, binding = 13) readonly buffer MODELDATA{
+    ModelData modelData[];
+};
+
+////////////////////
+struct Ray
+{
+    vec3 origin;
+    vec3 direction;
+    vec3 energy;
+};
+
+struct HitPoint
+{
+    vec3 position;
+    float dist;
+    vec3 normal;
+    uint material;
+    vec3 uvw;
+};
+
+struct Light
+{
+    vec3 position;
+    float offset1;
+    vec3 color;
+    float offset2;
+    vec3 offset3;
+    float radius;
+
+};
+
+struct Sphere
+{
+    vec3 position;
+    float radius;
+    uint material;
+};
+
+layout (std140, binding = 3) uniform LIGHTS
+{
+    Light      lights[128];
+};
+
+
+
+
+Ray createFirstRay();
+
+vec3 shade(Ray ray, HitPoint bestHit);
+
+HitPoint trace(Ray ray, bool skipLightsBalls);
+
+void updateRay(inout Ray ray, HitPoint bestHit);
+
+bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox);
+
+void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit, mat4 modelMatrix);
+
+vec3 barycentric(vec3 vert0, vec3 vert1, vec3 vert2, vec3 p){
+    vec3 uvw;
+    vec3 v0 = vert1 - vert0, v1 = vert2 - vert0, v2 = p - vert0;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    uvw.y = (d11 * d20 - d01 * d21) / denom;
+    uvw.z = (d00 * d21 - d01 * d20) / denom;
+    uvw.x = 1.0f - uvw.y - uvw.z;
+    return uvw;
+}
+
+bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit);//return true if we hit and update bestHit only it it is closer
+
+bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 modelMatrix)
+{
+    //https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+    const float EPSILON = 0.0000001;
+    vec3 vertex0 = (modelMatrix * vec4(vertices[triangle.vertexIndex0].position, 1.0f)).xyz;
+    vec3 vertex1 = (modelMatrix * vec4(vertices[triangle.vertexIndex1].position, 1.0f)).xyz;
+    vec3 vertex2 = (modelMatrix * vec4(vertices[triangle.vertexIndex2].position, 1.0f)).xyz;
+    vec3 edge1, edge2, h, s, q;
+    float a, f, u, v;
+    edge1 = vertex1 - vertex0;
+    edge2 = vertex2 - vertex0;
+    //TODO: for now i cant turn it on because refr action will be broken
+    //back face culling
+    vec3 N = cross(edge1, edge2);
+    //    if (dot(ray.direction, N) > 0){
+    //        return false;
+    //    }
+
+
+
+    h = cross(ray.direction, edge2);
+    a = dot(edge1, h);
+    if (a > -EPSILON && a < EPSILON)
+    return false;// This ray is parallel to this triangle.
+    f = 1.0/a;
+    s = ray.origin - vertex0;
+    u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0)
+    return false;
+    q = cross(s, edge1);
+    v = f * dot(ray.direction, q);
+    if (v < 0.0 || u + v > 1.0)
+    return false;
+    // At this stage we can compute t to find out where the intersection point is on the line.
+    float t = f * dot(edge2, q);
+
+    if (t > EPSILON && t < bestHit.dist)// ray intersection
+    {
+        bestHit.dist = t;
+        bestHit.position = ray.origin + t * ray.direction;
+
+        vec3 bary = barycentric(vertex0, vertex1, vertex2, bestHit.position);
+        bestHit.normal = bary.x * normals[triangle.normalIndex0].normal + bary.y *
+        normals[triangle.normalIndex1].normal + bary.z * normals[triangle.normalIndex2].normal;
+
+        if (dot(ray.direction, N) > 0){
+            bestHit.normal = - bestHit.normal;
+        }
+
+        bestHit.normal = bestHit.normal;
+
+        //            bestHit.normal = normalize(cross(edge1, edge2));
+
+        bestHit.material = triangle.material;
+
+        ////////////////// TEXTURE
+        //            if (triangle.material == 4){
+        //                vec2 tc = bary.x * texCoords[triangle.textureCoordsIndex1] + bary.y * texCoords[triangle.textureCoordsIndex2]
+        //                + bary.z * texCoords[triangle.textureCoordsIndex3];
+        //                materials[bestHit.material].albedo = texture(swordTexture, tc).xyz;
+        //            }
+
+        return true;
+    }
+    return false;
+}
+
+void main()
+{
+
+    materials[0].specular = vec3(0.2);
+    materials[0].albedo = vec3(0.7);
+
+    materials[1].specular = vec3(0.1);
+    materials[1].albedo = vec3(1.0, 0.0, 0.0);
+    materials[2].specular = vec3(0.1);
+    materials[2].albedo = vec3(0.0, 1.0, 0.0);
+    materials[3].specular = vec3(0.9);
+    materials[3].albedo = vec3(0.0, 0.0, 1.0);
+    materials[4].specular = vec3(0.1);
+    materials[4].albedo = vec3(1.0, 0.0, 0.1);
+
+    //light material
+    materials[5].specular = vec3(1);
+    materials[5].albedo = vec3(1.0, 1.0, 1.0);
+
+    Ray ray = createFirstRay();
+
+    vec3 color = vec3(0.0, 0.0, 0.0);
+
+    for (int recursion = 0; recursion < recursionDepth; recursion++){
+
+        HitPoint hit = trace(ray, false);
+        updateRay(ray, hit);
+        color += shade(ray, hit)* ray.energy;
+        ray.energy = ray.energy * materials[hit.material].specular;
+
+    }
+
+    //    color = texture(shadowMap, pixel_coords / vec2(1280., 720.)).xyz;
+    imageStore(img_color, pixel_coords, vec4(color, 1.0));
+}
+
+Ray createFirstRay()
+{
+    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
+    pixel_coords = ivec2(ivec2(gl_GlobalInvocationID.x, imageHeight-1 - gl_GlobalInvocationID.y));
+
+    float fov_scale = tan(radians(fov)/2.);
+    float imageAspectRatio = float(imageWidth)/ float(imageHeight);
+
+    float pixelCamera_x = (2. * (pixel_coords.x + 0.5) / float(imageWidth) - 1.) * imageAspectRatio * fov_scale;
+    float pixelCamera_y = (1. - 2. * (pixel_coords.y + 0.5) / float(imageHeight)) * fov_scale;
+
+    vec3 position = cameraPosition;
+    vec3 direction = (viewMatrix * vec4(vec3(pixelCamera_x, pixelCamera_y, -1.), 1.0)).xyz;
+
+    direction = normalize(direction - position);//subtrack cameraPosition because we have position saved in position variable and adding position of camera to direction would mess up direcion vectors
+
+    Ray ray;
+    ray.direction = direction;
+    ray.origin = position;
+    ray.energy = vec3(1.0, 1.0, 1.0);
+    return ray;
+}
+
+HitPoint trace(Ray ray, bool skipLightsBalls)
+{
+    HitPoint bestHit;
+    bestHit.dist = INFINITY;
+
+    for (uint i = beginOfModelsAndGrids; i<endOfModelsAndGrids; i++){
+        float tHitBox;
+        mat4 mocelMatrix =  modelData[i].scaleMatrix;
+        Ray ray_cpy = ray;
+        ray_cpy.origin = vec3(inverse(modelData[i].positionMatrix * modelData[i].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
+        ray_cpy.direction = vec3(inverse(modelData[i].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
+        if (modelData[i].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
+        {
+            if (tHitBox < bestHit.dist){
+                //ray.direction = mat3(modelData[i].inverseRotate) * ray.direction;
+                float bestHitPrev = bestHit.dist;
+                DDA(ray_cpy, gridData[i], tHitBox, bestHit, mocelMatrix);
+                if (bestHit.dist < bestHitPrev){
+                    //korekcja
+                    bestHit.position = vec3(modelData[i].positionMatrix * modelData[i].rotationMatrix* vec4(bestHit.position, 1.0));
+                    bestHit.normal = vec3(inverse(transpose(modelData[i].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
+                }
+            }
+        }
+    }
+    //    if(!skipLightsBalls){
+    //        Sphere sphere;
+    //
+    //        sphere.radius = 2.f;
+    //        sphere.material = 5;
+    //        for (int i = 0; i<numberOfLights; ++i){
+    //            sphere.position = lights[i].position;
+    //            if(intersectRaySphere(ray, sphere, bestHit)){
+    //                materials[5].albedo = lights[i].color;
+    //            }
+    //        }
+    //    }
+
+    return bestHit;
+}
+
+void updateRay(inout Ray ray, HitPoint bestHit){
+    if (bestHit.dist < INFINITY)
+    {
+
+
+        if (bestHit.material == 3){
+            ray.origin = bestHit.position - bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
+            // shadow-acne !
+            ray.direction = normalize(refract(ray.direction, bestHit.normal, 0.8));
+        } else {
+            ray.origin = bestHit.position + bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
+            // shadow-acne !
+            ray.direction = normalize(reflect(ray.direction, bestHit.normal));
+        }
+    }
+}
+
+float ShadowCalculation(vec4 fragPosLightSpace, vec3 positionVec, vec3 normalVec)
+{
+    // perform perspective divide
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    // transform to [0,1] range
+    projCoords = projCoords * 0.5 + 0.5;
+    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    // get depth of current fragment from light's perspective
+    float currentDepth = projCoords.z;
+    // calculate bias (based on depth map resolution and slope)
+    vec3 normal = normalize(normalVec);
+    vec3 lightPos = cameraPosition;
+    lightPos.y = 300;
+    lightPos = vec3(0., 300., 0.);
+    vec3 lightDir = normalize(lightPos - positionVec);
+    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+    // check whether current frag pos is in shadow
+    // float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
+    // PCF
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth  ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 9.0;
+
+    // keep the shadow at 0.0 when outside the far_plane region of the light's frustum.
+    if (projCoords.z > 1.0)
+    shadow = 0.0;
+
+    return shadow;
+}
+
+//float ShadowCalculation(vec4 fragPosLightSpace)
+//{
+//    // perform perspective divide
+//    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+//    // transform to [0,1] range
+//    projCoords = projCoords * 0.5 + 0.5;
+//    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+//    float closestDepth = texture(shadowMap, projCoords.xy).r;
+//    // get depth of current fragment from light's perspective
+//    float currentDepth = projCoords.z;
+//    // check whether current frag pos is in shadow
+//    float shadow = currentDepth - 1e-2 > closestDepth ? 1.0 : 0.0;
+//
+//    return shadow;
+//}
+
+vec3 shade(Ray ray, HitPoint bestHit){
+    if (bestHit.dist < INFINITY)
+    {
+        if (bestHit.material == 5){ //if we hit light
+            return materials[bestHit.material].albedo;
+        }
+
+        vec3 color = materials[bestHit.material].albedo / 20.;
+
+
+        bool globalLight = true;
+        if (globalLight){
+            bool useShadowMap = true;
+            float lightIntensity = 0.4;
+
+            if (useShadowMap){
+                //TODO fix light direction
+                vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
+                float shadow = (1. -ShadowCalculation(lightSpaceMatrix * vec4(bestHit.position, 1.0), bestHit.position, bestHit.normal));
+                color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * shadow * lightIntensity;
+            } else {
+                Ray shadowRay;
+
+                vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
+
+                shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+                shadowRay.direction = -directionalLight;
+
+                HitPoint shadowHit = trace(shadowRay, true);
+                if (!(shadowHit.dist < INFINITY)){
+                    color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
+                }
+            }
+        }
+
+            for (int i = 0; i<numberOfLights; ++i){
+                float dist = length(bestHit.position - lights[i].position);
+                if (dist < lights[i].radius){
+                    Ray shadowRay;
+                    shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+                    shadowRay.direction = normalize(lights[i].position - bestHit.position);
+                    HitPoint shadowHit = trace(shadowRay, true);
+
+                    vec3 V = normalize(-bestHit.position);
+                    vec3 L = normalize(lights[i].position - bestHit.position);
+                    vec3 N = bestHit.normal;
+                    vec3 R = reflect(-L, N);
+
+                    float rim = clamp(dot(N, V), 0.0, 1.0);
+                    rim = smoothstep(0.0, 1.0, 1.0 - rim);
+                    float diff = clamp(dot(N, L), 0.0, 1.0);
+                    float spec = pow(clamp(dot(R, N), 0.0, 1.0), 260.0);
+
+                    //                vec3 rim_color = vec3(0.0); // , 0.2, 0.2);
+                    //                vec3 diff_color = vec3(0.125); // , 0.8, 0.8);
+                    vec3 rim_color = vec3(0.0, 0.2, 0.2);
+                    vec3 diff_color = vec3(0.125, 0.8, 0.8);
+                    vec3 spec_color = vec3(0.1);
+
+                    if (!(shadowHit.dist < dist))
+                    color += (rim_color * rim + diff_color * diff + spec_color * spec) * clamp((1.-(dist/lights[i].radius)), 0., 1.);
+
+                }
+            }
+
+    return color * materials[bestHit.material].albedo + vec3(0.1);
+
+
+}
+else
+{
+return vec3(0.0);
+return vec3(0.1, 0.1, 0.5);
+}
+}
+
+bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox)
+{
+    float tmin = (boxMin.x - ray.origin.x) / ray.direction.x;
+    float tmax = (boxMax.x - ray.origin.x) / ray.direction.x;
+
+    if (tmin > tmax) {
+        float temp = tmin;
+        tmin = tmax;
+        tmax = temp;
+    }
+
+    float tymin = (boxMin.y - ray.origin.y) / ray.direction.y;
+    float tymax = (boxMax.y - ray.origin.y) / ray.direction.y;
+
+    if (tymin > tymax){
+        float temp = tymin;
+        tymin = tymax;
+        tymax = temp;
+    }
+
+    if ((tmin > tymax) || (tymin > tmax))
+    return false;
+
+    if (tymin > tmin)
+    tmin = tymin;
+
+    if (tymax < tmax)
+    tmax = tymax;
+
+    float tzmin = (boxMin.z - ray.origin.z) / ray.direction.z;
+    float tzmax = (boxMax.z - ray.origin.z) / ray.direction.z;
+
+    if (tzmin > tzmax){
+        float temp = tzmin;
+        tzmin = tzmax;
+        tzmax = temp;
+    }
+
+    if ((tmin > tzmax) || (tzmin > tmax))
+    return false;
+
+    if (tzmin > tmin)
+    tmin = tzmin;
+
+    if (tzmax < tmax)
+    tmax = tzmax;
+
+    tHitBox = tmin;
+
+    return true;
+}
+
+void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit, mat4 modelMatrix){
+    vec3 deltaT, nextCrossingT;
+    ivec3 exit, step, cell;
+
+    vec3 gridBegin = (modelMatrix * vec4(grid.gridBegin, 1.0f)).xyz;
+
+    vec3 rayOrigCell =  (ray.origin + ray.direction * tHitBox) - gridBegin;
+    //    cell.x = int(clamp(floor(float(rayOrigCell.x) / grid.cellSize.x), 0, grid.gridResolution.x - 1));
+    //    cell.y = int(clamp(floor(float(rayOrigCell.y) / grid.cellSize.y), 0, grid.gridResolution.y - 1));
+    //    cell.z = int(clamp(floor(float(rayOrigCell.z) / grid.cellSize.z), 0, grid.gridResolution.z - 1));
+
+    vec3 cellSize = grid.cellSize * vec3(modelMatrix[0][0], modelMatrix[1][1], modelMatrix[2][2]);
+
+    cell = clamp(ivec3(floor(rayOrigCell / cellSize)), ivec3(0), grid.gridResolution - ivec3(1));
+
+
+    if (ray.direction.x < 0){
+        deltaT.x = - cellSize.x / ray.direction.x;
+        nextCrossingT.x = tHitBox + (cell.x * cellSize.x - rayOrigCell.x) / ray.direction.x;
+        exit.x = -1;
+        step.x = -1;
+    } else {
+        deltaT.x = cellSize.x / ray.direction.x;
+        nextCrossingT.x = tHitBox + ((cell.x + 1) * cellSize.x - rayOrigCell.x) / ray.direction.x;
+        exit.x = grid.gridResolution.x;
+        step.x = 1;
+    }
+    if (ray.direction.y < 0){
+        deltaT.y = - cellSize.y / ray.direction.y;
+        nextCrossingT.y = tHitBox + (cell.y * cellSize.y - rayOrigCell.y) / ray.direction.y;
+        exit.y = -1;
+        step.y = -1;
+    } else {
+        deltaT.y = cellSize.y / ray.direction.y;
+        nextCrossingT.y = tHitBox + ((cell.y + 1) * cellSize.y - rayOrigCell.y) / ray.direction.y;
+        exit.y = grid.gridResolution.y;
+        step.y = 1;
+    }
+    if (ray.direction.z < 0){
+        deltaT.z = - cellSize.z / ray.direction.z;
+        nextCrossingT.z = tHitBox + (cell.z * cellSize.z - rayOrigCell.z) / ray.direction.z;
+        exit.z = -1;
+        step.z = -1;
+    } else {
+        deltaT.z = cellSize.z / ray.direction.z;
+        nextCrossingT.z = tHitBox + ((cell.z + 1) * cellSize.z - rayOrigCell.z) / ray.direction.z;
+        exit.z = grid.gridResolution.z;
+        step.z = 1;
+    }
+
+    while (true){
+        uint o = cell.z * grid.gridResolution.x * grid.gridResolution.y + cell.y * grid.gridResolution.x+cell.x;
+        uint c = o + grid.cellsBeginIndex;//cells3DToIndex(cellIndex, grid.gridResolution);
+
+        for (uint t = cells[c].beginOfTrianglesIndiciesArray; t < cells[c].endOfTrianglesIndiciesArray; t++){
+            uint j = trianglesIndicesInGrid[t];
+
+            vec3 cellBegin = vec3(cell) * cellSize + gridBegin;
+            vec3 cellEnd = vec3(cell + ivec3(1)) * cellSize + gridBegin;
+            bool intersect = intersectTriangle(ray, triangles[j], bestHit, modelMatrix);
+            bool isHitInCell = bestHit.position.x > cellBegin.x && bestHit.position.y > cellBegin.y && bestHit.position.z > cellBegin.z && bestHit.position.x < cellEnd.x && bestHit.position.y < cellEnd.y && bestHit.position.z < cellEnd.z;
+
+            vec3 cellPosition = vec3(cell) * cellSize + gridBegin + cellSize/2.;
+            float distanceToCell = distance(ray.origin, cellPosition) - length(cellSize/2.);
+
+            if (bestHit.dist < distanceToCell){
+                return;
+            }
+        }
+
+        uint k = (int(nextCrossingT.x < nextCrossingT.y) << 2) +
+        (int(nextCrossingT.x < nextCrossingT.z) << 1) +
+        (int(nextCrossingT.y < nextCrossingT.z));
+        uint map[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+        uint axis = map[k];
+        if (axis == 0) {
+            cell.x += step.x;
+            if (cell.x == exit.x) break;
+            nextCrossingT.x += deltaT.x;
+        } else if (axis == 1){
+            cell.y += step.y;
+            if (cell.y == exit.y) break;
+            nextCrossingT.y += deltaT.y;
+        } else if (axis == 2){
+            cell.z += step.z;
+            if (cell.z == exit.z) break;
+            nextCrossingT.z += deltaT.z;
+        }
+
+    }
+}
+
+bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit)
+{
+    vec3 v = ray.origin - sphere.position;
+    float B = 2.0 * dot(ray.direction, v);
+    float C = dot(v, v) - sphere.radius * sphere.radius;
+    float B2 = B * B;
+
+    float f = B2 - 4.0 * C;
+
+    if (f < 0.0)
+    return false;
+
+    f = sqrt(f);
+    float t0 = -B + f;
+    float t1 = -B - f;
+    float t = min(max(t0, 0.0), max(t1, 0.0)) * 0.5;
+
+    if (t == 0.0)
+    return false;
+
+    if (t < bestHit.dist){
+        bestHit.dist = t;
+        bestHit.position = ray.origin + t * ray.direction;
+        bestHit.normal = normalize(bestHit.position - sphere.position);
+        bestHit.material = sphere.material;
+    }
+
+
+    return true;
+}
+
+
+

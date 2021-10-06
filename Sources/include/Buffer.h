@@ -31,7 +31,7 @@ public:
 
     void remove();
 
-private:
+//private:
     GLuint bufferID = 0;
     size_t bufferSize = 0;
 
