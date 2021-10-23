@@ -43,10 +43,14 @@ public:
     }
 
     int getNumberOfCells() const{
-        return std::distance(beginOfCellsArray, endOfCellsArray);
+        return int(std::distance(beginOfCellsArray, endOfCellsArray));
     }
 
-private:
+    GridData getGridData() const{
+        return gridData;
+    }
+
+//private:
     glm::ivec3 to3D(uint32_t idx) {
         int z = idx / (gridResolution.x * gridResolution.y);
         idx -= (z * gridResolution.x * gridResolution.y);

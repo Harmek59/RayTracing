@@ -20,10 +20,16 @@ public:
     }
 
     virtual void draw(const Scene& scene) override {
+        ImGui::SliderFloat("gamma:", &gamma, 0.0, 5.0);
+        ImGui::SliderFloat("exposure:", &exposure, 0.0, 10.0);
+
         rayTracingShader->use();
         rayTracingShader->setMat4("viewMatrix", glm::inverse(
                 CoreEngine::getCamera().getViewMatrix()));  //we need to invert view matrix, because everything inside view matrix is inverted (position -> -positon itp.)
         rayTracingShader->setVec3("cameraPosition", CoreEngine::getCamera().getPosition());
+
+        rayTracingShader->setFloat("gamma", gamma);
+        rayTracingShader->setFloat("exposure", exposure);
 
 
         glm::vec3 lightPos = CoreEngine::getCamera().getPosition();
@@ -56,6 +62,8 @@ private:
 
     Texture2D out_color_tex{1280, 720, GL_RGBA32F, GL_RGBA, GL_FLOAT};
 
+    float gamma = 2.2f;
+    float exposure = 0.2f;
 
     std::string drawTextureShaderPath_vert = "../Resources/shaders/raytracer/draw_texture.vert";
     std::string drawTextureShaderPath_frag = "../Resources/shaders/raytracer/draw_texture.frag";

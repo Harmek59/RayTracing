@@ -46,9 +46,9 @@ private:
 
     inline static short oglVersionMajor = 4;
     inline static short oglVersionMinor = 3;
-    inline static uint32_t windowWidth = 1280;
-    inline static uint32_t windowHeight = 720;
-    inline static std::string title = "";
+    inline static uint32_t windowWidth = 1600;
+    inline static uint32_t windowHeight = 900;
+    inline static std::string title = "Ray tracing";
 
     inline static float deltaTime = 0.0;
 

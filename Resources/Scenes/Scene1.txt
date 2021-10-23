@@ -1,9 +1,11 @@
 ../Resources/meshes/sword/Sting-Sword-lowpoly.obj 90. 0. -30. 50. 50. 50. 4
-../Resources/meshes/cat.obj -20. -50. -80. 50. 50. 50. 2
+../Resources/meshes/goat.obj -40. -50. -30. 50. 50. 50. 2
+! -60. -50. -30. 50. 50. 50. 2
+! -80. -50. -30. 50. 50. 50. 2
+! -100. -50. -30. 50. 50. 50. 2
+! -120. -50. -30. 50. 50. 50. 2
 ../Resources/meshes/renifer.obj 30. -50. -30. 50. 50. 50. 3
 ../Resources/meshes/tree.obj 0. -20. -60. 50. 50. 50. 1
-#../Resources/meshes/girl_OBJ.obj -30. -20. -30. 50. 50. 50. 0
-#../Resources/meshes/dragon_50k.obj -30. -20. -30. 50. 50. 50. 0
 ../Resources/meshes/FinalBaseMesh.obj -40. -20. -90. 50. 50. 50. 3
 ../Resources/meshes/floor_3walls.obj -40. -35. -90. 200. 75. 200. 0
 ../Resources/meshes/skeleton.obj -100. -20. -60. 30. 30. 30. 0

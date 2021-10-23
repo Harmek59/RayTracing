@@ -6,6 +6,8 @@
 
 #include <glm/glm.hpp>
 
+#include "BVHTree.h"
+
 #include "GLSLShader.h"
 #include "Texture2D.h"
 #include "CoreEngine.h"
@@ -13,11 +15,14 @@
 #include "Temp_Lights.h"
 #include "Model.h"
 #include "DisplayModeNormal.h"
-#include "DisplayModePerformanceMeasure.h"
 #include "DisplayModeRasterizationWithGrids.h"
-#include "DisplayModeShadowCubeMap.h"
 #include "DisplayModeDirectionalShadowMap.h"
+#include "DisplayModePointShadowCubeMap.h"
+#include "DisplayModeTree.h"
 #include "Scene.h"
+#include "Material.h"
+#include "TextureCubeMap.h"
+#include "Gui.h"
 
 #include <vector>
 #include <string>
@@ -40,7 +45,13 @@ MessageCallback(GLenum source,
 
 int main() {
     CoreEngine::createCoreEngine();
+    Gui gui;
 
+    TextureCubeMap cubeMap(
+            {"../Resources/skybox/right.jpg", "../Resources/skybox/left.jpg", "../Resources/skybox/top.jpg",
+             "../Resources/skybox/bottom.jpg", "../Resources/skybox/front.jpg", "../Resources/skybox/back.jpg"});
+    glActiveTexture(GL_TEXTURE2);
+    cubeMap.bind();
 
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
@@ -48,17 +59,24 @@ int main() {
     CoreEngine::getCamera().setMovementSpeed(40.);
     CoreEngine::getCamera().setRotation(glm::radians(180.f), 0.f, 0.f);
 
+    Material materials;
+    materials.loadFromFile("../Resources/Materials.txt");
+    Material::bindBuffers(4);
+
     std::map<std::string, Scene> scenes;
     scenes.emplace("1_BasicScene", Scene("../Resources/Scenes/Scene1.txt"));
     scenes.emplace("2_Ball", Scene("../Resources/Scenes/Scene2.txt"));
+    scenes.emplace("2_Cats", Scene("../Resources/Scenes/Scene3.txt"));
+    scenes.emplace("4_Tree", Scene("../Resources/Scenes/Scene4.txt"));
 
-    Scene *currScene = &scenes.begin()->second;
+
+    Scene *currScene = &scenes.at("4_Tree");
 
     DisplayModeNormal displayModeNormal;
-    DisplayModePerformanceMeasure displayModePerformanceMeasure;
     DisplayModeRasterizationWithGrids displayModeRasterizationWithGrids;
-    DisplayModeShadowCubeMap displayModeShadowCubeMap;
     DisplayModeDirectionalShadowMap displayModeDirectionalShadowMap;
+    DisplayModePointShadowCubeMap displayModePointShadowCubeMap;
+    DisplayModeTree displayModeTree;
 
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
@@ -71,12 +89,12 @@ int main() {
 
     std::map<std::string, DisplayModeInterface *> displayModes;
     displayModes["normal"] = &displayModeNormal;
-    displayModes["perfMeasure"] = &displayModePerformanceMeasure;
     displayModes["rasterWithGrid"] = &displayModeRasterizationWithGrids;
     displayModes["directionalShadowMap"] = &displayModeDirectionalShadowMap;
-//    displayModes["ShadowCubeMap"] = &displayModeShadowCubeMap;
+    displayModes["pointShadowCubeMap"] = &displayModePointShadowCubeMap;
+    displayModes["Tree"] = &displayModeTree;
 
-    DisplayModeInterface *displayMode = &displayModeNormal;
+    DisplayModeInterface *displayMode = &displayModeTree;
 
     double deltaTimeSum = 0.;
     int frameCounter = 0;
@@ -87,45 +105,23 @@ int main() {
     while (!CoreEngine::checkIfMainLoopShouldBreak()) {
         CoreEngine::preFrameLogic();
 
+        ImGui::ShowDemoWindow();
+
         Camera &camera = CoreEngine::getCamera();
 
-        ImGui::Text(GPUName.c_str());
-        deltaTimeSum += CoreEngine::getDeltaTime();
-        frameCounter++;
-        if(deltaTimeSum > 0.25){    //update 4 times per second
-            avgFrameTime = float(deltaTimeSum / frameCounter);
-            avgFps = int(1. / avgFrameTime);
-            deltaTimeSum = 0.0;
-            frameCounter = 0;
-        }
-        ImGui::Text("FPS: %d", avgFps);
-        ImGui::Text("Frame time: %f", avgFrameTime * 1000);
-        ImGui::Text("Camera position: %f, %f, %f", camera.getPosition().x, camera.getPosition().y,
-                    camera.getPosition().z);
+        gui.drawMainInterface(displayModes, &displayMode, pause);
 
-
-        std::string oglErr = "";
-        while (auto err = glGetError())
-            oglErr += std::to_string(err);
-        ImGui::Text("OpenGL errors: %s", oglErr.c_str());
-        ImGui::Text("===================");
-        for (auto &[k, v] : displayModes) {
-            if (ImGui::Button(k.c_str())) {
-                displayMode = v;
-            }
-        }
-        if (ImGui::Button("Reload shaders")) {
-            displayMode->loadShaders();
-        }
-        if (ImGui::Button("Pause"))
-            pause = !pause;
 
 
         auto deltaTime = CoreEngine::getDeltaTime();
         if (pause)
             deltaTime = 0.0;
 
-        ImGui::Begin("Scene");
+
+        ImGui::SetNextWindowPos(ImVec2(1280, 0));
+        ImGui::SetNextWindowSize(ImVec2(329, 900 ));
+//        ImGui::Begin("Scene", nullptr, flags);
+ImGui::Begin("Scene");
         for (auto&[name, scene] : scenes) {
             if (ImGui::Button(name.c_str())) {
                 currScene = &scene;
@@ -171,13 +167,13 @@ int main() {
             }
 
         }
-        ImGui::End();
+
 
         currScene->atFrameBegin(deltaTime);
 
         displayMode->draw(*currScene);
 
-
+        ImGui::End();
         CoreEngine::postFrameLogic();
     }
     return 0;

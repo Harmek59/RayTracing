@@ -16,9 +16,8 @@ Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multip
         throw std::runtime_error(warn + err);
     }
 
-    std::cout << warn + err << std::endl;
+//    std::cout << warn + err << std::endl;
 
-    std::cout << "Materials data:\n";
     for (auto &material: materials) {
         std::cout << "Name: " << material.name << "\nTextures:\n" << std::endl;
         std::cout << "Ambient: " << material.ambient_texname << "\n";
@@ -96,8 +95,6 @@ Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multip
     triangleMesh.normalize();
 
     GridDDA grid(triangleMesh);
-
-    std::cout << "========================================\n";
 
     return std::make_pair(triangleMesh, grid);
 }

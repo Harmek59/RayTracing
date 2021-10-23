@@ -46,8 +46,8 @@ TriangleMesh::TriangleMesh(std::vector<Vertex> v, std::vector<Triangle> t, std::
     endOfMeshVertices = vertices.end();
 
 
-    std::cout << "NumberOfTriangle:\t" << std::distance(beginOfMeshTriangles, endOfMeshTriangles) << std::endl;
-    std::cout << "NumberOfVertices:\t" << std::distance(beginOfMeshVertices, endOfMeshVertices) << std::endl;
+//    std::cout << "NumberOfTriangle:\t" << std::distance(beginOfMeshTriangles, endOfMeshTriangles) << std::endl;
+//    std::cout << "NumberOfVertices:\t" << std::distance(beginOfMeshVertices, endOfMeshVertices) << std::endl;
 }
 
 void TriangleMesh::normalize() {
@@ -64,6 +64,7 @@ void TriangleMesh::normalize() {
         iter->z -= (bBox.second.z - bBox.first.z) / maxDimensionSize / 2.f;
     }
 
+    std::tie(bbBegin, bbEnd) = calculateBoundingBox();  //TODO calculate normalized  bb simmilar to the way above
 }
 
 std::pair<glm::vec3, glm::vec3> TriangleMesh::calculateBoundingBox() const {
@@ -81,8 +82,6 @@ std::pair<glm::vec3, glm::vec3> TriangleMesh::calculateBoundingBox() const {
         maxZ = std::max(maxZ, vert.z);
         minZ = std::min(minZ, vert.z);
     });
-    std::cout << "BoundingBox:\t" << minX << ", " << minY << ", " << minZ << " | " << maxX << ", " << maxY << ", "
-              << maxZ << std::endl;
 
     return std::make_pair(glm::vec3{minX, minY, minZ}, glm::vec3{maxX, maxY, maxZ});
 }
@@ -104,8 +103,8 @@ void TriangleMesh::bindBuffers(uint32_t trianglesBufferBinding, uint32_t vertice
 
         buff.bindBufferBase(GL_SHADER_STORAGE_BUFFER, bindingBlock);
     };
-    std::cout << "\nBinding buffers: trianglesArray: " << triangles.size() << ", verticesArray: " << vertices.size()
-              << std::endl;
+//    std::cout << "\nBinding buffers: trianglesArray: " << triangles.size() << ", verticesArray: " << vertices.size()
+//              << std::endl;
     bindBuffer(trianglesBuffer, triangles, trianglesBufferBinding);
     bindBuffer(verticesBuffer, vertices, verticesBufferBinding);
     bindBuffer(normalsBuffer, normals, normalsBufferBinding);

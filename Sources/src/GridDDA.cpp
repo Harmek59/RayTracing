@@ -75,14 +75,7 @@ GridDDA::GridDDA(const TriangleMesh &mesh) {
 
                     if (triBoxOverlap(boxcenter, boxhalfsize, triverts)) {
                         auto triangleIndex = std::distance(mesh.triangles.begin(), iter);
-                        if (from3D(glm::ivec3(x, y, z)) >= localIndiciesArr.size()) {
-                            std::cout << "error: " << from3D(glm::ivec3(x, y, z)) << " | "
-                            << localIndiciesArr.size() << std::endl;
-                            std::cout << x << ", " << y << ", " << z << std::endl;
-
-                            std::cout << "======\n";
-                        } else
-                            localIndiciesArr[from3D(glm::ivec3(x, y, z))].push_back(uint32_t(triangleIndex));
+                        localIndiciesArr[from3D(glm::ivec3(x, y, z))].push_back(uint32_t(triangleIndex));
                     }
 
                 }
@@ -93,11 +86,11 @@ GridDDA::GridDDA(const TriangleMesh &mesh) {
     size_t indiciesArrSize = 0;
     for (auto &v : localIndiciesArr) indiciesArrSize += v.size();
 
-    std::cout << "DDA Grid report:\nNumberOfCells:\t" << numberOfCells << "\n number of indicies:\t"
-    << indiciesArrSize
-    << "\nGridResolution:\t" << gridResolution.x << ", " << gridResolution.y
-    << ", " << gridResolution.z <<
-    "\nCellSize:\t" << cellSize.x << ", " << cellSize.y << ", " << cellSize.z << std::endl;
+//    std::cout << "DDA Grid report:\nNumberOfCells:\t" << numberOfCells << "\n number of indicies:\t"
+//    << indiciesArrSize
+//    << "\nGridResolution:\t" << gridResolution.x << ", " << gridResolution.y
+//    << ", " << gridResolution.z <<
+//    "\nCellSize:\t" << cellSize.x << ", " << cellSize.y << ", " << cellSize.z << std::endl;
 
     cellsArray.reserve(cellsArray.size() + numberOfCells);
     trianglesIndiciesArray.reserve(trianglesIndiciesArray.size() + indiciesArrSize);

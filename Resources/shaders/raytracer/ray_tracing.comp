@@ -1,13 +1,15 @@
 #version 430
 
+bool somethingWentWrong = false;
+
+uniform float gamma = 2.2;
+uniform float exposure = 1.0;
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba32f, binding = 0) uniform image2D img_color;
 layout(binding = 1) uniform sampler2D shadowMap;
-
-
-layout (binding = 3) uniform sampler2D swordTexture;
+layout(binding = 2) uniform samplerCube shadowCubeMap;
 
 
 layout (binding = 5) uniform SCENE_DATA{
@@ -28,17 +30,34 @@ uniform float fov = 45.;
 
 uniform mat4 lightSpaceMatrix;
 
-struct Material{
-    vec3 albedo;
-    vec3 specular;
-};
-
-Material materials[6];
-
-
 ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
 float INFINITY = 1.0 / 0.0;
+
+struct AABB{
+    vec3 begin;
+    int modelIndex;// if -1 we did not "hit" model BB yet
+    vec3 end;
+    uint isValid;
+};
+
+layout (std430, binding = 15) readonly buffer BVH_TREE{
+    AABB bvhTree[];
+};
+
+
+
+struct Material{
+    vec3 albedo;
+    uint offset1;
+    vec3 specular;
+    uint offset2;
+};
+layout (std430, binding = 4) readonly buffer MATERIALS
+{
+    Material materials[];
+};
+
 //////////////////////
 struct Triangle{
     uint vertexIndex0;
@@ -49,26 +68,26 @@ struct Triangle{
     uint normalIndex1;
     uint normalIndex2;
     uint offset;
-    uint textureCoordsIndex1;
+    uint textureCoordsIndex1;// TODO delete texture coordinates
     uint textureCoordsIndex2;
     uint textureCoordsIndex3;
     uint offset2;
+};
+
+layout (std430, binding = 8) readonly buffer TRIANGLE
+{
+    Triangle triangles[];
 };
 
 struct Vertex{
     vec3 position;
     uint offset;
 };
-uniform uint numberOfTrianglesFromMesh = 0;
-layout (std430, binding = 8) readonly buffer TRIANGLE
-{
-    Triangle triangles[];
-};
-
 layout (std430, binding = 9) readonly buffer VERTEX
 {
     Vertex vertices[];
 };
+
 struct NormalsFromMesh{
     vec3 normal;
     uint offset;
@@ -78,38 +97,18 @@ layout (std430, binding = 7) readonly buffer NORMAL
     NormalsFromMesh normals[];
 };
 
-layout (std430, binding = 6) readonly buffer TEXTURE_COORDS
-{
-    vec2 texCoords[];
-};
-
-
-////////
-ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
-    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
-    idx = idx - int(z * gridResolution.x * gridResolution.y);
-    int y = int(float(idx) / float(gridResolution.x));
-    int x = int(mod(float(idx), float(gridResolution.x)));
-    return ivec3(x, y, z);
-}
-
-uint cells3DToIndex(ivec3 cords, ivec3 gridResolution){
-    return (cords.z * gridResolution.x * gridResolution.y) + (cords.y * gridResolution.x) + cords.x;
-
-}
-
 struct Cell {
     uint beginOfTrianglesIndiciesArray;
     uint endOfTrianglesIndiciesArray;
 };
-layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
-{
-    uint trianglesIndicesInGrid[];
-};
-
 layout (std430, binding = 11) readonly buffer CELLS
 {
     Cell cells[];
+};
+
+layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
+{
+    uint trianglesIndicesInGrid[];
 };
 
 struct GridData{
@@ -123,7 +122,6 @@ struct GridData{
     int offset2;
 };
 
-//uniform int numberOfGrids = 7;
 layout (std430, binding = 12) readonly buffer GRIDSDATA
 {
     GridData gridData[];
@@ -181,13 +179,26 @@ layout (std140, binding = 3) uniform LIGHTS
 };
 
 
+ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
+    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
+    idx = idx - int(z * gridResolution.x * gridResolution.y);
+    int y = int(float(idx) / float(gridResolution.x));
+    int x = int(mod(float(idx), float(gridResolution.x)));
+    return ivec3(x, y, z);
+}
+uint cells3DToIndex(ivec3 cords, ivec3 gridResolution){
+    return (cords.z * gridResolution.x * gridResolution.y) + (cords.y * gridResolution.x) + cords.x;
+}
 
 
 Ray createFirstRay();
 
 vec3 shade(Ray ray, HitPoint bestHit);
 
+vec3 shade2(Ray ray, HitPoint bestHit);
+
 HitPoint trace(Ray ray, bool skipLightsBalls);
+HitPoint traceUsingTree(Ray ray);
 
 void updateRay(inout Ray ray, HitPoint bestHit);
 
@@ -230,8 +241,6 @@ bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 
     //        return false;
     //    }
 
-
-
     h = cross(ray.direction, edge2);
     a = dot(edge1, h);
     if (a > -EPSILON && a < EPSILON)
@@ -261,18 +270,11 @@ bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 
             bestHit.normal = - bestHit.normal;
         }
 
-        bestHit.normal = bestHit.normal;
+        bestHit.normal = normalize(bestHit.normal);
 
         //            bestHit.normal = normalize(cross(edge1, edge2));
 
         bestHit.material = triangle.material;
-
-        ////////////////// TEXTURE
-        //            if (triangle.material == 4){
-        //                vec2 tc = bary.x * texCoords[triangle.textureCoordsIndex1] + bary.y * texCoords[triangle.textureCoordsIndex2]
-        //                + bary.z * texCoords[triangle.textureCoordsIndex3];
-        //                materials[bestHit.material].albedo = texture(swordTexture, tc).xyz;
-        //            }
 
         return true;
     }
@@ -281,37 +283,32 @@ bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 
 
 void main()
 {
-
-    materials[0].specular = vec3(0.2);
-    materials[0].albedo = vec3(0.7);
-
-    materials[1].specular = vec3(0.1);
-    materials[1].albedo = vec3(1.0, 0.0, 0.0);
-    materials[2].specular = vec3(0.1);
-    materials[2].albedo = vec3(0.0, 1.0, 0.0);
-    materials[3].specular = vec3(0.9);
-    materials[3].albedo = vec3(0.0, 0.0, 1.0);
-    materials[4].specular = vec3(0.1);
-    materials[4].albedo = vec3(1.0, 0.0, 0.1);
-
-    //light material
-    materials[5].specular = vec3(1);
-    materials[5].albedo = vec3(1.0, 1.0, 1.0);
-
     Ray ray = createFirstRay();
 
     vec3 color = vec3(0.0, 0.0, 0.0);
 
     for (int recursion = 0; recursion < recursionDepth; recursion++){
+        HitPoint hit;
+        if (true){
+            hit = traceUsingTree(ray);
+        } else {
+            hit = trace(ray, false);
 
-        HitPoint hit = trace(ray, false);
+        }
         updateRay(ray, hit);
-        color += shade(ray, hit)* ray.energy;
+        color += shade2(ray, hit)* ray.energy;
         ray.energy = ray.energy * materials[hit.material].specular;
 
     }
 
-    //    color = texture(shadowMap, pixel_coords / vec2(1280., 720.)).xyz;
+
+    color = vec3(1.0) - exp(-color * exposure);
+    color = pow(color, vec3(1.0 / gamma));
+
+    if(somethingWentWrong){
+        color = vec3(1.0, 0.0, 0.0);
+    }
+
     imageStore(img_color, pixel_coords, vec4(color, 1.0));
 }
 
@@ -336,6 +333,58 @@ Ray createFirstRay()
     ray.origin = position;
     ray.energy = vec3(1.0, 1.0, 1.0);
     return ray;
+}
+
+HitPoint traceUsingTree(Ray ray){
+    HitPoint bestHit;
+    bestHit.dist = INFINITY;
+    float tHitBox;
+
+    int currentNodeIndex = 0;
+
+    int recursionStack[20];
+    int stactSize = 0;
+
+    while (true){
+        if (bvhTree[currentNodeIndex].isValid == 1){
+            if (intersectBox(ray, bvhTree[currentNodeIndex].begin, bvhTree[currentNodeIndex].end, tHitBox) && bestHit.dist > tHitBox){
+
+                if (bvhTree[currentNodeIndex].modelIndex != -1){ //leaf
+//                    somethingWentWrong = true;
+
+                    uint i = bvhTree[currentNodeIndex].modelIndex + beginOfModelsAndGrids;// model index
+                    float tHitBox;
+                    mat4 mocelMatrix =  modelData[i].scaleMatrix;
+                    Ray ray_cpy = ray;
+                    ray_cpy.origin = vec3(inverse(modelData[i].positionMatrix * modelData[i].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
+                    ray_cpy.direction = vec3(inverse(modelData[i].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
+                    if (modelData[i].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
+                    {
+                        if (tHitBox < bestHit.dist){
+                            //ray.direction = mat3(modelData[i].inverseRotate) * ray.direction;
+                            float bestHitPrev = bestHit.dist;
+                            DDA(ray_cpy, gridData[i], tHitBox, bestHit, mocelMatrix);
+                            if (bestHit.dist < bestHitPrev){
+                                //korekcja
+                                bestHit.position = vec3(modelData[i].positionMatrix * modelData[i].rotationMatrix* vec4(bestHit.position, 1.0));
+                                bestHit.normal = vec3(inverse(transpose(modelData[i].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
+                            }
+                        }
+                    }
+                } else {
+                    recursionStack[stactSize++] = currentNodeIndex * 2 + 2;//rigth
+                    recursionStack[stactSize++] = currentNodeIndex * 2 + 1;//left
+                }
+            }
+        }
+        if (stactSize == 0){
+            break;
+        }
+        currentNodeIndex = recursionStack[--stactSize];
+
+    }
+
+    return bestHit;
 }
 
 HitPoint trace(Ray ray, bool skipLightsBalls)
@@ -363,18 +412,19 @@ HitPoint trace(Ray ray, bool skipLightsBalls)
             }
         }
     }
-    //    if(!skipLightsBalls){
-    //        Sphere sphere;
-    //
-    //        sphere.radius = 2.f;
-    //        sphere.material = 5;
-    //        for (int i = 0; i<numberOfLights; ++i){
-    //            sphere.position = lights[i].position;
-    //            if(intersectRaySphere(ray, sphere, bestHit)){
-    //                materials[5].albedo = lights[i].color;
-    //            }
-    //        }
-    //    }
+
+    if (!skipLightsBalls){
+        Sphere sphere;
+
+        sphere.radius = 2.f;
+        sphere.material = 5;
+        for (int i = 0; i<numberOfLights; ++i){
+            sphere.position = lights[i].position;
+            if (intersectRaySphere(ray, sphere, bestHit)){
+                //                materials[5].albedo = lights[i].color;
+            }
+        }
+    }
 
     return bestHit;
 }
@@ -382,8 +432,6 @@ HitPoint trace(Ray ray, bool skipLightsBalls)
 void updateRay(inout Ray ray, HitPoint bestHit){
     if (bestHit.dist < INFINITY)
     {
-
-
         if (bestHit.material == 3){
             ray.origin = bestHit.position - bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
             // shadow-acne !
@@ -394,6 +442,25 @@ void updateRay(inout Ray ray, HitPoint bestHit){
             ray.direction = normalize(reflect(ray.direction, bestHit.normal));
         }
     }
+}
+
+float ShadowCalculationCubeMap(vec3 fragPos, vec3 lightPos)
+{
+    // get vector between fragment position and light position
+    vec3 fragToLight = fragPos - lightPos;
+    // ise the fragment to light vector to sample from the depth map
+    float closestDepth = texture(shadowCubeMap, fragToLight).r;
+    // it is currently in linear range between [0,1], let's re-transform it back to original depth value
+    closestDepth *= 500.f;
+    // now get current linear depth as the length between the fragment and light position
+    float currentDepth = length(fragToLight);
+    // test for shadows
+    float bias = 2.;// we use a much larger bias since depth is now in [near_plane, far_plane] range
+    float shadow = currentDepth -  bias > closestDepth ? 1.0 : 0.0;
+    // display closestDepth as debug (to visualize depth cubemap)
+    // FragColor = vec4(vec3(closestDepth / far_plane), 1.0);
+
+    return shadow;
 }
 
 float ShadowCalculation(vec4 fragPosLightSpace, vec3 positionVec, vec3 normalVec)
@@ -435,21 +502,54 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 positionVec, vec3 normalVec
     return shadow;
 }
 
-//float ShadowCalculation(vec4 fragPosLightSpace)
-//{
-//    // perform perspective divide
-//    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-//    // transform to [0,1] range
-//    projCoords = projCoords * 0.5 + 0.5;
-//    // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-//    float closestDepth = texture(shadowMap, projCoords.xy).r;
-//    // get depth of current fragment from light's perspective
-//    float currentDepth = projCoords.z;
-//    // check whether current frag pos is in shadow
-//    float shadow = currentDepth - 1e-2 > closestDepth ? 1.0 : 0.0;
-//
-//    return shadow;
-//}
+vec3 shade2(Ray ray, HitPoint bestHit){
+    vec3 color = vec3(0.0);
+    if (bestHit.dist < INFINITY){
+
+        vec3 Diffuse = materials[bestHit.material].albedo;
+        float Specular = materials[bestHit.material].specular.x;
+        vec3 ambient  = Diffuse * 0.1;// hard-coded ambient component
+        vec3 viewDir  = normalize(ray.origin - bestHit.position);
+        //        directional
+        {
+            // diffuse
+            //    vec3 lightDir = normalize(lights[i].Position - FragPos);
+            vec3 lightDir = vec3(-0.2, -1.0, -0.3);
+            vec3 lightColor = vec3(0.8);
+            vec3 diffuse = max(dot(bestHit.normal, lightDir), 0.0) * Diffuse * lightColor;
+            // specular
+            vec3 halfwayDir = normalize(lightDir + viewDir);
+            float spec = pow(max(dot(bestHit.normal, halfwayDir), 0.0), 16.0);
+            vec3 specular = lightColor * spec * Specular;
+            float shadow = (1. -ShadowCalculation(lightSpaceMatrix * vec4(bestHit.position, 1.0), bestHit.position, bestHit.normal));
+            color += shadow * (ambient + diffuse + specular);
+        }
+        {
+            vec3 pointLightPos = vec3(-20.0, 20.0, -20.0);
+            vec3 lightDir = normalize(pointLightPos - bestHit.position);
+            vec3 lightColor = vec3(3.0);
+            vec3 diffuse = max(dot(bestHit.normal, lightDir), 0.0) * Diffuse * lightColor;
+            // specular
+            vec3 halfwayDir = normalize(lightDir + viewDir);
+            float spec = pow(max(dot(bestHit.normal, halfwayDir), 0.0), 16.0);
+            vec3 specular = lightColor * spec * Specular;
+            // attenuation
+            float distance = length(pointLightPos - bestHit.position);
+            float lightLinear = 0.7;
+            float lightQuadratic = 1.8;
+            float attenuation = 1.0 / (1.0 + lightLinear * distance + lightQuadratic * distance * distance);
+            diffuse *= attenuation;
+            specular *= attenuation;
+            float shadow = (1. - ShadowCalculationCubeMap(bestHit.position, pointLightPos));
+            color += shadow * (ambient + diffuse + specular);
+        }
+        return color;
+    }
+    else
+    {
+        return vec3(0.0);
+    }
+}
 
 vec3 shade(Ray ray, HitPoint bestHit){
     if (bestHit.dist < INFINITY)
@@ -458,13 +558,13 @@ vec3 shade(Ray ray, HitPoint bestHit){
             return materials[bestHit.material].albedo;
         }
 
-        vec3 color = materials[bestHit.material].albedo / 20.;
+        vec3 color = materials[bestHit.material].albedo;
 
 
         bool globalLight = true;
         if (globalLight){
             bool useShadowMap = true;
-            float lightIntensity = 0.4;
+            float lightIntensity = 0.8;
 
             if (useShadowMap){
                 //TODO fix light direction
@@ -486,45 +586,49 @@ vec3 shade(Ray ray, HitPoint bestHit){
             }
         }
 
-            for (int i = 0; i<numberOfLights; ++i){
-                float dist = length(bestHit.position - lights[i].position);
-                if (dist < lights[i].radius){
-                    Ray shadowRay;
-                    shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
-                    shadowRay.direction = normalize(lights[i].position - bestHit.position);
-                    HitPoint shadowHit = trace(shadowRay, true);
+        vec3 pointLightPos = vec3(-20.0, 20.0, -20.0);
+        float pointLightIntensity = 0.6;
+        float shadow = (1. - ShadowCalculationCubeMap(bestHit.position, pointLightPos));
+        color += clamp(dot(bestHit.normal, -(pointLightPos - bestHit.position)) * -1, 0.0, 1.0) * shadow * pointLightIntensity;
+        //        for (int i = 0; i<numberOfLights; ++i){
+        //            float dist = length(bestHit.position - lights[i].position);
+        //            if (dist < lights[i].radius){
+        //                Ray shadowRay;
+        //                shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+        //                shadowRay.direction = normalize(lights[i].position - bestHit.position);
+        //                HitPoint shadowHit = trace(shadowRay, true);
+        //
+        //                vec3 V = normalize(-bestHit.position);
+        //                vec3 L = normalize(lights[i].position - bestHit.position);
+        //                vec3 N = bestHit.normal;
+        //                vec3 R = reflect(-L, N);
+        //
+        //                float rim = clamp(dot(N, V), 0.0, 1.0);
+        //                rim = smoothstep(0.0, 1.0, 1.0 - rim);
+        //                float diff = clamp(dot(N, L), 0.0, 1.0);
+        //                float spec = pow(clamp(dot(R, N), 0.0, 1.0), 260.0);
+        //
+        //                //                vec3 rim_color = vec3(0.0); // , 0.2, 0.2);
+        //                //                vec3 diff_color = vec3(0.125); // , 0.8, 0.8);
+        //                vec3 rim_color = vec3(0.0, 0.2, 0.2);
+        //                vec3 diff_color = vec3(0.125, 0.8, 0.8);
+        //                vec3 spec_color = vec3(0.1);
+        //
+        //                if (!(shadowHit.dist < dist))
+        //                color += (rim_color * rim + diff_color * diff + spec_color * spec) * clamp((1.-(dist/lights[i].radius)), 0., 1.);
+        //
+        //            }
+        //        }
 
-                    vec3 V = normalize(-bestHit.position);
-                    vec3 L = normalize(lights[i].position - bestHit.position);
-                    vec3 N = bestHit.normal;
-                    vec3 R = reflect(-L, N);
-
-                    float rim = clamp(dot(N, V), 0.0, 1.0);
-                    rim = smoothstep(0.0, 1.0, 1.0 - rim);
-                    float diff = clamp(dot(N, L), 0.0, 1.0);
-                    float spec = pow(clamp(dot(R, N), 0.0, 1.0), 260.0);
-
-                    //                vec3 rim_color = vec3(0.0); // , 0.2, 0.2);
-                    //                vec3 diff_color = vec3(0.125); // , 0.8, 0.8);
-                    vec3 rim_color = vec3(0.0, 0.2, 0.2);
-                    vec3 diff_color = vec3(0.125, 0.8, 0.8);
-                    vec3 spec_color = vec3(0.1);
-
-                    if (!(shadowHit.dist < dist))
-                    color += (rim_color * rim + diff_color * diff + spec_color * spec) * clamp((1.-(dist/lights[i].radius)), 0., 1.);
-
-                }
-            }
-
-    return color * materials[bestHit.material].albedo + vec3(0.1);
+        return color * materials[bestHit.material].albedo + vec3(0.1);
 
 
-}
-else
-{
-return vec3(0.0);
-return vec3(0.1, 0.1, 0.5);
-}
+    }
+    else
+    {
+        return vec3(0.0);
+        return vec3(0.1, 0.1, 0.5);
+    }
 }
 
 bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox)
@@ -573,6 +677,10 @@ bool intersectBox(Ray ray, vec3 boxMin, vec3 boxMax, out float tHitBox)
 
     if (tzmax < tmax)
     tmax = tzmax;
+
+    if (tmax < 0.0){
+        return false;
+    }
 
     tHitBox = tmin;
 
@@ -697,10 +805,5 @@ bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit)
         bestHit.normal = normalize(bestHit.position - sphere.position);
         bestHit.material = sphere.material;
     }
-
-
     return true;
 }
-
-
-

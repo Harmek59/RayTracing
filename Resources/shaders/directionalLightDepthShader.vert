@@ -1,6 +1,4 @@
 #version 430 core
-layout (location = 0) in vec3 aPos;
-
 uniform mat4 lightSpaceMatrix;
 
 layout (binding = 5) uniform SCENE_DATA{
@@ -61,7 +59,22 @@ void main()
     uint triangleId = gl_VertexID/3;
     uint vertexId = int(mod(gl_VertexID, 3));
 
-    Triangle trgl = triangles[triangleId + modelData[beginOfModelsAndGrids].brginEndTriangles.x];
+    uint trianglesSkipped = 0;
+    uint localTriangleID = 0;
+    int modelID = int(beginOfModelsAndGrids);
+    for (int i = int(beginOfModelsAndGrids); i<int(endOfModelsAndGrids); i++){
+        uint trianglesInModel = modelData[i].brginEndTriangles.y - modelData[i].brginEndTriangles.x;
+        trianglesSkipped += trianglesInModel;
+        if (triangleId >= trianglesSkipped){
+            modelID++;
+        } else {
+            localTriangleID = triangleId - trianglesSkipped + trianglesInModel;
+            break;
+        }
+    }
+
+    //    Triangle trgl = triangles[triangleId + modelData[beginOfModelsAndGrids].brginEndTriangles.x];
+    Triangle trgl = triangles[localTriangleID + modelData[modelID].brginEndTriangles.x];
     Vertex vert;
     if (vertexId == 0){
         vert = vertices[trgl.vertexIndex0];
@@ -70,19 +83,8 @@ void main()
     } else {
         vert = vertices[trgl.vertexIndex2];
     }
-    int modelID = int(beginOfModelsAndGrids);
-    for (int i = int(beginOfModelsAndGrids); i<int(endOfModelsAndGrids); i++){
-        if (triangleId >= modelData[i].brginEndTriangles.y){
-            modelID++;
-        } else {
-            break;
-        }
-    }
     mat4 model = modelData[modelID].positionMatrix * modelData[modelID].rotationMatrix * modelData[modelID].scaleMatrix;
     discardTriangle = int(modelData[modelID].whetherToDraw[0]);
 
     gl_Position = lightSpaceMatrix * model * vec4(vert.position, 1.0);
-    //        gl_Position = lightSpaceMatrix * vec4(vert.position, 1.0);
-
-
 }

@@ -20,6 +20,7 @@ GLFWwindow* OpenGLHandler::getWindow(){
 
 void OpenGLHandler::initGLFW(unsigned majorVersjon, unsigned minorVersion){
     glfwInit();
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, majorVersjon);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, minorVersion);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);

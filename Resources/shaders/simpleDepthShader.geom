@@ -22,15 +22,5 @@ void main()
             EmitVertex();
         }
         EndPrimitive();
-
-//        gl_Position = vec4(0.5, 0.5, -0.5, 1.0);
-//        EmitVertex();
-//        gl_Position = vec4(-0.5, 0.5, -0.5, 1.0);
-//        EmitVertex();
-//        gl_Position = vec4(0.0, -0.5, -0.5, 1.0);
-//        EmitVertex();
-//        EndPrimitive();
-
-
     }
 }

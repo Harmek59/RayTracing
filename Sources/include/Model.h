@@ -20,9 +20,20 @@ public:
         auto trianglesEnd = std::distance(triangleMesh.triangles.begin(), triangleMesh.endOfMeshTriangles);
         modelDataArray.push_back(
                 ModelData{getPositionMatrix(), getRotationMatrix(), getScaleMatrix(), glm::vec4(1.0), glm::ivec4(1),
-                          glm::vec4(1.0), glm::vec4(1.0)});
+                          uint32_t(trianglesEnd - trianglesBegin), glm::vec3(1.0), glm::vec4(1.0)});
         modelDataIndex = uint32_t(modelDataArray.size() - 1);
         modelDataArray[modelDataIndex].beginEndTriangles = glm::ivec4(trianglesBegin, trianglesEnd, 0, 0);
+    }
+
+    Model(const Model &model, glm::vec3 position, glm::vec3 scale) {
+        this->position = position;
+        this->scale = scale;
+        GridDDA::gridDataArray.push_back(model.grid.getGridData());
+        ModelData modelData = modelDataArray[model.modelDataIndex];
+        modelData.positionMatrix = getPositionMatrix();
+        modelData.scaleMatrix = getScaleMatrix();
+        modelDataArray.push_back(modelData);
+        modelDataIndex = uint32_t(modelDataArray.size() - 1);
     }
 
     std::pair<TriangleMesh, GridDDA>
@@ -98,7 +109,8 @@ public:
 
         glm::vec4 whetherToDraw;
         glm::ivec4 beginEndTriangles;
-        glm::vec4 offset;
+        uint32_t numberOfTriangles;
+        glm::vec3 offset;
         glm::vec4 offset2;
     };
 
