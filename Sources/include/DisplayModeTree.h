@@ -4,6 +4,8 @@
 #include "GLSLShader.h"
 #include "CoreEngine.h"
 
+#include <imgui.h>
+
 class DisplayModeTree : public DisplayModeInterface {
 public:
 

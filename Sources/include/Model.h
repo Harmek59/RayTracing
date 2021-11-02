@@ -143,7 +143,7 @@ public:
 
     template<typename dataType>
     static void bindOneBuffer(Buffer &buff, dataType &data, uint32_t bindingBlock) {
-        using Type = dataType::value_type;
+        using Type = typename dataType::value_type;
         buff = Buffer(data.size() * sizeof(Type), GL_DYNAMIC_DRAW);
         buff.bind(GL_SHADER_STORAGE_BUFFER);
         Type *dataPtr = (Type *) buff.mapBuffer(GL_SHADER_STORAGE_BUFFER,

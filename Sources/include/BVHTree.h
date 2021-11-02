@@ -270,7 +270,7 @@ public:
 
     void bindBuffer(uint32_t treeOfModelBufferBinding) {
         auto bindBuffer = [](Buffer &buff, auto &data, uint32_t bindingBlock) {
-            using Type = std::decay_t<decltype(data)>::value_type;
+            using Type = typename std::decay_t<decltype(data)>::value_type;
             buff = Buffer(data.size() * sizeof(Type), GL_DYNAMIC_DRAW);
             buff.bind(GL_SHADER_STORAGE_BUFFER);
             Type *dataPtr = (Type *) buff.mapBuffer(GL_SHADER_STORAGE_BUFFER,

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iterator>
 #include <cassert>
+#include <cstring>
 
 #include <iostream>
 #include <stdexcept>
@@ -84,7 +85,7 @@ std::pair<glm::vec3, glm::vec3> TriangleMesh::calculateBoundingBox() const {
 void TriangleMesh::bindBuffers(uint32_t trianglesBufferBinding, uint32_t verticesBufferBinding,
                                uint32_t normalsBufferBinding, uint32_t textureCoordsBufferBinding) {
     auto bindBuffer = [](Buffer &buff, auto &data, uint32_t bindingBlock) {
-        using Type = std::decay_t<decltype(data)>::value_type;
+        using Type = typename std::decay_t<decltype(data)>::value_type;
         buff = Buffer(data.size() * sizeof(Type), GL_DYNAMIC_DRAW);
         buff.bind(GL_SHADER_STORAGE_BUFFER);
         Type *dataPtr = (Type *) buff.mapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY | GL_MAP_INVALIDATE_BUFFER_BIT);
