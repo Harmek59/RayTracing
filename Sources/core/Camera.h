@@ -1,13 +1,10 @@
 #pragma once
-#include <glad/glad.h>
+
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
-
-class Camera
-{
+class Camera {
 public:
-    enum Directions{
+    enum Directions {
         FORWARD,
         BACKWARD,
         LEFT,
@@ -27,33 +24,35 @@ public:
     void setScreenSize(uint32_t screenWidth, uint32_t screenHeight);
 
     void setMovementSpeed(float speed);
+
     float getMovementSpeed() const;
-   
+
     void setMouseSensitivity(float sensitivity);
+
     float getMouseSensitivity() const;
 
     void processMouseMovement(float xPos, float yPos);
 
-
     void update();
 
     // yaw, pitch, roll in radians
-	void rotate(float yaw, float pitch, float roll, GLboolean constrainPitch = true);
+    void rotate(float yaw, float pitch, float roll, bool constrainPitch = true);
+
     void move(Directions direction, float deltaTime);
 
     glm::mat4 getViewMatrix() const;
-	glm::mat4 getProjectionMatrix() const;
+
+    glm::mat4 getProjectionMatrix() const;
 
     void setPosition(glm::vec3 p);
+
     void setRotation(float yaw, float pitch, float roll);
 
-	glm::vec3 getPosition() const;
+    glm::vec3 getPosition() const;
 
-    void invertHorizontalMovement(){
-        invertHorizontalMove = !invertHorizontalMove;
-    }
+    void setFirstMouseMove(bool val);
 
-//private:
+private:
     bool invertHorizontalMove = false;
 
     //projection attributes
@@ -76,11 +75,8 @@ public:
     // camera options
     float movementSpeed = 100.;
     float mouseSensitivity = 0.05f;
-    
+
     //matrixes
     glm::mat4 viewMatrix;
-	glm::mat4 projectionMatrix;
-
-   
-    
+    glm::mat4 projectionMatrix;
 };

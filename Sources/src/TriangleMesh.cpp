@@ -28,11 +28,6 @@ TriangleMesh::TriangleMesh(std::vector<Vertex> v, std::vector<Triangle> t, std::
                        trg.normalIndex2 += normalsOffset;
                        trg.normalIndex3 += normalsOffset;
 
-                       trg.textureCoordsIndex1 += texCoordsOffset;
-                       trg.textureCoordsIndex2 += texCoordsOffset;
-                       trg.textureCoordsIndex3 += texCoordsOffset;
-
-
                        return std::move(trg);
                    });
 

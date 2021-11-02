@@ -1,6 +1,45 @@
 #include "Model.h"
 #include <tiny_obj_loader.h>
 
+ glm::mat4 Model::getModelMatrix() const {
+    glm::mat4 model = glm::mat4(1.);
+    model = glm::translate(model, position);
+    model = glm::scale(model, scale);
+    return model;
+}
+
+glm::mat4 Model::getPositionMatrix() const {
+    glm::mat4 model = glm::mat4(1.);
+    model = glm::translate(model, position);
+    return model;
+}
+
+glm::mat4 Model::getRotationMatrix() const {
+    glm::mat4 model = glm::mat4(1.);
+    model = glm::rotate(model, glm::radians(rotation.x), glm::vec3(1., 0., 0.));
+    model = glm::rotate(model, glm::radians(rotation.y), glm::vec3(0., 1., 0.));
+    model = glm::rotate(model, glm::radians(rotation.z), glm::vec3(0., 0., 1.));
+    return model;
+}
+
+glm::mat4 Model::getScaleMatrix() const {
+    glm::mat4 model = glm::mat4(1.);
+    model = glm::scale(model, scale);
+    return model;
+}
+
+void Model::updateModelData() {
+    modelDataArray[modelDataIndex].positionMatrix = getPositionMatrix();
+    modelDataArray[modelDataIndex].rotationMatrix = getRotationMatrix();
+    modelDataArray[modelDataIndex].scaleMatrix = getScaleMatrix();
+
+    if (draw) {
+        modelDataArray[modelDataIndex].whetherToDraw[0] = 1;
+    } else {
+        modelDataArray[modelDataIndex].whetherToDraw[0] = 0;
+    }
+}
+
 std::pair<TriangleMesh, GridDDA>
 Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multiplier, uint32_t materialID) {
 
@@ -81,10 +120,6 @@ Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multip
             triangle.normalIndex1 = shape.mesh.indices[i].normal_index;
             triangle.normalIndex2 = shape.mesh.indices[i + 1].normal_index;
             triangle.normalIndex3 = shape.mesh.indices[i + 2].normal_index;
-
-            triangle.textureCoordsIndex1 = shape.mesh.indices[i].texcoord_index;
-            triangle.textureCoordsIndex2 = shape.mesh.indices[i + 1].texcoord_index;
-            triangle.textureCoordsIndex3 = shape.mesh.indices[i + 2].texcoord_index;
 
             triangles.push_back(triangle);
         }

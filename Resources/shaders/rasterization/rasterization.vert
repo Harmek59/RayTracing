@@ -25,10 +25,6 @@ struct Triangle{
     uint normalIndex1;
     uint normalIndex2;
     uint offset;
-    uint textureCoordsIndex1;
-    uint textureCoordsIndex2;
-    uint textureCoordsIndex3;
-    uint offset2;
 };
 
 struct Vertex{

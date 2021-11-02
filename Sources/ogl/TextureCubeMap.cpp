@@ -1,6 +1,8 @@
 #include "TextureCubeMap.h"
-#include <utility>
+
 #include <stb_image.h>
+
+#include <utility>
 #include <iostream>
 
 TextureCubeMap::TextureCubeMap(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
@@ -38,8 +40,8 @@ void TextureCubeMap::create() {
 void TextureCubeMap::setTextureParameters() {
     bind();
     // set the texture wrapping parameters
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -80,7 +82,7 @@ void TextureCubeMap::loadDataFromFile(const std::array<std::string, 6> &fileName
     GLenum format;
     std::array<uint8_t *, 6> dataArr;
     for (int i = 0; i < 6; i++) {
-        unsigned char *data = stbi_load(fileNameArr[0].c_str(), &width, &height, &nrChannels, 0);
+        unsigned char *data = stbi_load(fileNameArr[i].c_str(), &width, &height, &nrChannels, 0);
         if (nrChannels == 3) format = GL_RGB;
         else if (nrChannels == 4) format = GL_RGBA;
         if (data) {

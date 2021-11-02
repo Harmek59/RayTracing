@@ -106,7 +106,6 @@ GridDDA::GridDDA(const TriangleMesh &mesh) {
     beginOfCellsArray = std::prev(cellsArray.end(), numberOfCells);
     endOfCellsArray = cellsArray.end();
 
-
     gridData.gridBegin = boundingBox.first;
     gridData.gridEnd = boundingBox.second;
     gridData.cellsBeginIndex = uint32_t(std::distance(cellsArray.begin(), beginOfCellsArray));
@@ -116,4 +115,5 @@ GridDDA::GridDDA(const TriangleMesh &mesh) {
 
 
     gridDataArray.push_back(gridData);
+    gridDataIndex = gridDataArray.size() - 1;
 }

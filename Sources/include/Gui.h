@@ -20,7 +20,7 @@ public:
         flags = ImGuiWindowFlags_(ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_NoSavedSettings);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(1.f / 3.f, 1.f / 3.f, 1.f / 3.f, 1.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     }
 
     void drawMainInterface(const std::map<std::string, DisplayModeInterface *> &displayModes,
@@ -61,6 +61,12 @@ public:
                     ImGui::Text(std::string(
                             "Camera position: " + glm::to_string(CoreEngine::getCamera().getPosition())).c_str());
                     ImGui::Text("OpenGL errors: %s", oglErr.c_str());
+
+                    static bool showDemoWindow = false;
+                    ImGui::Checkbox("DemoWindow", &showDemoWindow);
+                    if(showDemoWindow){
+                        ImGui::ShowDemoWindow();
+                    }
                 }
 
                 ImGui::TableNextColumn();

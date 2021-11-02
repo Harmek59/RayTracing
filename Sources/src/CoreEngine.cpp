@@ -50,6 +50,10 @@ void CoreEngine::enableFaceCulling(){
     glFrontFace(GL_CCW); 
 }
 
+void CoreEngine::enableDepthTest(){
+    glEnable(GL_DEPTH_TEST);
+}
+
 void CoreEngine::processInput()
 {
     GLFWwindow *window = getWindow();
@@ -73,11 +77,13 @@ void CoreEngine::processInput()
     if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE && P_press) {
         P_press = false;
         if (mouseCaptured) {
+            ImGui::GetIO().ConfigFlags ^= ImGuiConfigFlags_NoMouse;
             glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             mouseCaptured = false;
-            camera.firstMouseMove = true;
+            camera.setFirstMouseMove(true);
         }
         else {
+            ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
             glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             mouseCaptured = true;
         }
@@ -88,7 +94,7 @@ void CoreEngine::processInput()
 
 void CoreEngine::preFrameLogic(){
     deltaTime = frameCounter.update(static_cast<float>(glfwGetTime()));
- 
+
     processInput();    
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

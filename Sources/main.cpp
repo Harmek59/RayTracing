@@ -8,12 +8,8 @@
 
 #include "BVHTree.h"
 
-#include "GLSLShader.h"
 #include "Texture2D.h"
 #include "CoreEngine.h"
-#include "Buffer.h"
-#include "Temp_Lights.h"
-#include "Model.h"
 #include "DisplayModeNormal.h"
 #include "DisplayModeRasterizationWithGrids.h"
 #include "DisplayModeDirectionalShadowMap.h"
@@ -45,16 +41,22 @@ MessageCallback(GLenum source,
 
 int main() {
     CoreEngine::createCoreEngine();
+    CoreEngine::enableDepthTest();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse; // capturing mouse, i need to disable mouse in imgui as well
+
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(MessageCallback, 0);
+
     Gui gui;
 
     TextureCubeMap cubeMap(
             {"../Resources/skybox/right.jpg", "../Resources/skybox/left.jpg", "../Resources/skybox/top.jpg",
              "../Resources/skybox/bottom.jpg", "../Resources/skybox/front.jpg", "../Resources/skybox/back.jpg"});
-    glActiveTexture(GL_TEXTURE2);
+//    TextureCubeMap cubeMap(
+//            {"../Resources/skybox/SwedishRoyalCastle/posx.jpg", "../Resources/skybox/SwedishRoyalCastle/negx.jpg", "../Resources/skybox/SwedishRoyalCastle/posy.jpg",
+//             "../Resources/skybox/SwedishRoyalCastle/negy.jpg", "../Resources/skybox/SwedishRoyalCastle/posz.jpg", "../Resources/skybox/SwedishRoyalCastle/negz.jpg"});
+    glActiveTexture(GL_TEXTURE3);
     cubeMap.bind();
-
-    glEnable(GL_DEBUG_OUTPUT);
-    glDebugMessageCallback(MessageCallback, 0);
 
     CoreEngine::getCamera().setMovementSpeed(40.);
     CoreEngine::getCamera().setRotation(glm::radians(180.f), 0.f, 0.f);
@@ -68,9 +70,10 @@ int main() {
     scenes.emplace("2_Ball", Scene("../Resources/Scenes/Scene2.txt"));
     scenes.emplace("2_Cats", Scene("../Resources/Scenes/Scene3.txt"));
     scenes.emplace("4_Tree", Scene("../Resources/Scenes/Scene4.txt"));
+//    scenes.emplace("5_5kk", Scene("../Resources/Scenes/Scene5.txt"));
 
 
-    Scene *currScene = &scenes.at("4_Tree");
+    Scene *currScene = &scenes.at("1_BasicScene");
 
     DisplayModeNormal displayModeNormal;
     DisplayModeRasterizationWithGrids displayModeRasterizationWithGrids;
@@ -83,7 +86,7 @@ int main() {
     glBindVertexArray(VAO);
 
 
-    glDisable(GL_DEBUG_OUTPUT);
+//    glDisable(GL_DEBUG_OUTPUT);
 
     std::string GPUName = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 
@@ -94,23 +97,21 @@ int main() {
     displayModes["pointShadowCubeMap"] = &displayModePointShadowCubeMap;
     displayModes["Tree"] = &displayModeTree;
 
-    DisplayModeInterface *displayMode = &displayModeTree;
+    DisplayModeInterface *displayMode = &displayModeNormal;
 
-    double deltaTimeSum = 0.;
-    int frameCounter = 0;
-    int avgFps = 0;
-    float avgFrameTime = 0.0;
 
     bool pause = false;
+
+    bool buildAfterDraw = false;
+
     while (!CoreEngine::checkIfMainLoopShouldBreak()) {
         CoreEngine::preFrameLogic();
+        auto start = std::chrono::high_resolution_clock::now();
 
-        ImGui::ShowDemoWindow();
 
         Camera &camera = CoreEngine::getCamera();
 
         gui.drawMainInterface(displayModes, &displayMode, pause);
-
 
 
         auto deltaTime = CoreEngine::getDeltaTime();
@@ -119,9 +120,11 @@ int main() {
 
 
         ImGui::SetNextWindowPos(ImVec2(1280, 0));
-        ImGui::SetNextWindowSize(ImVec2(329, 900 ));
+        ImGui::SetNextWindowSize(ImVec2(329, 900));
 //        ImGui::Begin("Scene", nullptr, flags);
-ImGui::Begin("Scene");
+        ImGui::Begin("Scene");
+        ImGui::Checkbox("Build after draw", &buildAfterDraw);
+
         for (auto&[name, scene] : scenes) {
             if (ImGui::Button(name.c_str())) {
                 currScene = &scene;
@@ -144,6 +147,7 @@ ImGui::Begin("Scene");
         }
         if (selectedModel > -1 && selectedModel < int(currScene->getModels().size())) {
             auto &model = currScene->getModels()[selectedModel];
+            ImGui::SliderFloat3("Position", &model.position.x, -500.f, 500.f);
             ImGui::SliderFloat("Position x:", &model.position.x, -500.f, 500.f);
             ImGui::SliderFloat("Position y:", &model.position.y, -500.f, 500.f);
             ImGui::SliderFloat("Position z:", &model.position.z, -500.f, 500.f);
@@ -168,10 +172,18 @@ ImGui::Begin("Scene");
 
         }
 
-
         currScene->atFrameBegin(deltaTime);
 
+
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        glActiveTexture(GL_TEXTURE3);
+        cubeMap.bind();
+
+        ImGui::Text("Trace: %f ms przed Draw", duration.count() / 1000.);
         displayMode->draw(*currScene);
+
 
         ImGui::End();
         CoreEngine::postFrameLogic();

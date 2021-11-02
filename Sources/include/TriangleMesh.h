@@ -17,10 +17,6 @@ public:
         uint32_t normalIndex2;
         uint32_t normalIndex3;
         uint32_t : 32;
-        uint32_t textureCoordsIndex1;
-        uint32_t textureCoordsIndex2;
-        uint32_t textureCoordsIndex3;
-        uint32_t : 32;
     };
 
     struct Vertex {
@@ -41,7 +37,7 @@ public:
 
     TriangleMesh() = default;
 
-    TriangleMesh(std::vector<Vertex> v, std::vector<Triangle> t, std::vector<Normals> n, std::vector<TextureCoords> tc);
+    TriangleMesh(std::vector<Vertex> v, std::vector<Triangle> t, std::vector<Normals> n, std::vector<TextureCoords> tc);    //TODO delete tc - texture coordinates
 
     std::pair<glm::vec3, glm::vec3> calculateBoundingBox() const;
 

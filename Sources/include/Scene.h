@@ -16,11 +16,12 @@ public:
 
     Scene(const std::string &path) {
         setUp(path);
-        bvhTree = BVHTree(models.size() * 5);
+        bvhTree = BVHTree(int(models.size() * 5)); // TODO delete 5
     }
 
     void setUp(const std::string &path) {
         sceneData.beginOfModelsAndGrids = uint32_t(Model::modelDataArray.size());
+        sceneData.beginOfModelsAndGrids = uint32_t(GridDDA::gridDataArray.size());
         std::cout << "Loading scene:\n";
         std::ifstream sceneFile(path);
         if (sceneFile.is_open()) {
@@ -49,7 +50,6 @@ public:
                     models.emplace_back(models[lastOriginalIdx], position, scale);
                     models.back().triangleMesh.bbBegin = models[lastOriginalIdx].triangleMesh.bbBegin;
                     models.back().triangleMesh.bbEnd = models[lastOriginalIdx].triangleMesh.bbEnd;
-
                 } else {
                     models.emplace_back(meshPath, position, scale, material);
 
@@ -60,13 +60,14 @@ public:
             }
         }
         sceneData.endOfModelsAndGrids = uint32_t(Model::modelDataArray.size());
+        sceneData.endOfModelsAndGrids = uint32_t(GridDDA::gridDataArray.size());
 
-        std::cout << "Scene summarize:\n";
-        std::cout << "\tnumber of models: " << sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids << " ("
-                  << sceneData.beginOfModelsAndGrids << " - " << sceneData.endOfModelsAndGrids << ")\n";
-        std::cout << "\tnumber of triangles: " << getNumbersOfTriangles() << " ("
-                  << Model::modelDataArray[sceneData.beginOfModelsAndGrids].beginEndTriangles.x << " - " <<
-                  Model::modelDataArray[sceneData.endOfModelsAndGrids - 1].beginEndTriangles.y << ")\n";
+//        std::cout << "Scene summarize:\n";
+//        std::cout << "\tnumber of models: " << sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids << " ("
+//                  << sceneData.beginOfModelsAndGrids << " - " << sceneData.endOfModelsAndGrids << ")\n";
+//        std::cout << "\tnumber of triangles: " << getNumbersOfTriangles() << " ("
+//                  << Model::modelDataArray[sceneData.beginOfModelsAndGrids].beginEndTriangles.x << " - " <<
+//                  Model::modelDataArray[sceneData.endOfModelsAndGrids - 1].beginEndTriangles.y << ")\n";
 
 
         TriangleMesh::bindBuffers(8, 9, 7, 6);
@@ -77,7 +78,6 @@ public:
     }
 
     void atFrameBegin(double deltaTime) {
-        lights.update(deltaTime);
         updateSceneDataBuffer();
         updateModelData();
         Model::updateBuffers();
@@ -113,14 +113,17 @@ public:
     int getNumbersOfCells() const {
         int nmbr = 0;
         for (const auto &m: models) {
-            nmbr += m.grid.getNumberOfCells();
+            for(int i = m.gridsBeginIndex; i < m.gridsEndIndex; i++){
+                const auto & grid = GridDDA::gridDataArray[i];
+                nmbr += grid.cellsEndIndex - grid.cellsBeginIndex;
+            }
         }
         return nmbr;
     }
 
-    int getNumberOfModels() const {
-        return sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids;
-    }
+//    int getNumberOfModels() const {
+//        return sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids;
+//    }
 
     const auto& getTree() const{
         return bvhTree;
@@ -160,7 +163,6 @@ private:
 
 
     std::vector<Model> models;
-    Temp_Lights lights{128};
 
     DirectionalShadow directionalShadow;
     PointShadow pointShadow;

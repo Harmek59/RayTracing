@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 #include <array>
 #include <string>
 
@@ -10,7 +9,7 @@ public:
     TextureCubeMap(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                    const std::array<uint8_t *, 6> &data = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr});
 
-    TextureCubeMap(const std::array<std::string,6> &fileNameArr);
+    TextureCubeMap(const std::array<std::string, 6> &fileNameArr);
 
     ~TextureCubeMap();
 
@@ -22,17 +21,13 @@ public:
     TextureCubeMap(const TextureCubeMap &) = delete;
 
     TextureCubeMap &operator=(const TextureCubeMap &) = delete;
-
-    void create();
-
+    
     void setTextureParameters();
 
     void setTextureData(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                         const std::array<uint8_t *, 6> &data);
 
-//    void generateMipMap();
-
-    void loadDataFromFile(const std::array<std::string,6> &fileNameArr);
+    void loadDataFromFile(const std::array<std::string, 6> &fileNameArr);
 
     void bind();
 
@@ -40,8 +35,10 @@ public:
 
     GLuint getTextureID();
 
+private:
     void remove();
 
-private:
+    void create();
+
     GLuint textureID = 0;
 };

@@ -2,7 +2,6 @@
 
 #include "GridDDA.h"
 #include "TriangleMesh.h"
-#include "LoadMeshFromFile.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -13,7 +12,16 @@
 class Model {
 public:
     Model(const std::string &path, glm::vec3 position, glm::vec3 scale = glm::vec3(1.0f), uint32_t materialID = 0) {
+        gridsBeginIndex = GridDDA::gridDataArray.size();
+        GridDDA grid;
         std::tie(triangleMesh, grid) = loadObjMesh(path, position, scale, materialID);
+
+        //take only first half
+        int newZSize = grid.gridData.gridResolution.z / 2;
+//        grid.gridData.gridResolution.z = newZSize;
+
+        std::vector<GridDDA> grids;
+        grids.push_back(grid);
         this->position = position;
         this->scale = scale;
         auto trianglesBegin = std::distance(triangleMesh.triangles.begin(), triangleMesh.beginOfMeshTriangles);
@@ -23,60 +31,67 @@ public:
                           uint32_t(trianglesEnd - trianglesBegin), glm::vec3(1.0), glm::vec4(1.0)});
         modelDataIndex = uint32_t(modelDataArray.size() - 1);
         modelDataArray[modelDataIndex].beginEndTriangles = glm::ivec4(trianglesBegin, trianglesEnd, 0, 0);
+
+        for (auto grid: grids) {
+            //grid data jest dodawane do gridDataArray w konstruktorze GridDDA
+            GridDDA::gridDataArray[grid.gridDataIndex].modelDataId = modelDataIndex;
+
+//            auto gd = GridDDA::gridDataArray[grid.gridDataIndex];// second one
+//
+//            GridDDA::gridDataArray[grid.gridDataIndex].gridResolution.z = newZSize;
+//
+//            GridDDA::gridDataArray[grid.gridDataIndex].gridEnd.z = GridDDA::gridDataArray[grid.gridDataIndex].gridBegin.z + grid.gridData.cellSize.z * newZSize;
+//            GridDDA::gridDataArray[grid.gridDataIndex].cellsEndIndex =
+//                    GridDDA::gridDataArray[grid.gridDataIndex].cellsBeginIndex +
+//                    newZSize * grid.gridData.gridResolution.y * grid.gridData.gridResolution.x;
+//
+//
+//            gd.gridResolution.z = gd.gridResolution.z - newZSize -1;
+//            gd.gridBegin.z += grid.gridData.cellSize.z * gd.gridResolution.z;
+//            gd.cellsBeginIndex += gd.gridResolution.z * grid.gridData.gridResolution.y * grid.gridData.gridResolution.x;
+//            GridDDA::gridDataArray.push_back(gd);
+        }
+        gridsEndIndex = GridDDA::gridDataArray.size();
     }
 
     Model(const Model &model, glm::vec3 position, glm::vec3 scale) {
         this->position = position;
         this->scale = scale;
-        GridDDA::gridDataArray.push_back(model.grid.getGridData());
+
         ModelData modelData = modelDataArray[model.modelDataIndex];
         modelData.positionMatrix = getPositionMatrix();
         modelData.scaleMatrix = getScaleMatrix();
         modelDataArray.push_back(modelData);
         modelDataIndex = uint32_t(modelDataArray.size() - 1);
+//        grids = model.grids;
+        triangleMesh = model.triangleMesh;
+
+
+        gridsBeginIndex = GridDDA::gridDataArray.size();
+        std::vector<GridDDA::GridData> temp;
+
+
+        for (int i = model.gridsBeginIndex; i < model.gridsEndIndex; i++) {
+            temp.push_back(GridDDA::gridDataArray[i]);
+            temp.back().modelDataId = modelDataIndex;
+        }
+
+        std::move(temp.begin(), temp.end(), std::back_inserter(GridDDA::gridDataArray));
+        gridsEndIndex = GridDDA::gridDataArray.size();
     }
 
     std::pair<TriangleMesh, GridDDA>
     loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multiplier, uint32_t materialID);
 
-    glm::mat4 getModelMatrix() const {
-        glm::mat4 model = glm::mat4(1.);
-        model = glm::translate(model, position);
-        model = glm::scale(model, scale);
-        return model;
-    }
+    glm::mat4 getModelMatrix() const;
 
-    glm::mat4 getPositionMatrix() const {
-        glm::mat4 model = glm::mat4(1.);
-        model = glm::translate(model, position);
-        return model;
-    }
+    glm::mat4 getPositionMatrix() const;
 
-    glm::mat4 getRotationMatrix() const {
-        glm::mat4 model = glm::mat4(1.);
-        model = glm::rotate(model, glm::radians(rotation.x), glm::vec3(1., 0., 0.));
-        model = glm::rotate(model, glm::radians(rotation.y), glm::vec3(0., 1., 0.));
-        model = glm::rotate(model, glm::radians(rotation.z), glm::vec3(0., 0., 1.));
-        return model;
-    }
+    glm::mat4 getRotationMatrix() const;
 
-    glm::mat4 getScaleMatrix() const {
-        glm::mat4 model = glm::mat4(1.);
-        model = glm::scale(model, scale);
-        return model;
-    }
+    glm::mat4 getScaleMatrix() const;
 
-    void updateModelData() {
-        modelDataArray[modelDataIndex].positionMatrix = getPositionMatrix();
-        modelDataArray[modelDataIndex].rotationMatrix = getRotationMatrix();
-        modelDataArray[modelDataIndex].scaleMatrix = getScaleMatrix();
-
-        if (draw) {
-            modelDataArray[modelDataIndex].whetherToDraw[0] = 1;
-        } else {
-            modelDataArray[modelDataIndex].whetherToDraw[0] = 0;
-        }
-    }
+    void updateModelData();
 
     static void
     bindBuffers(uint32_t modelDataBufferBinding) {
@@ -97,7 +112,10 @@ public:
     }
 
 //private:
-    GridDDA grid;
+    uint32_t gridsBeginIndex;
+    uint32_t gridsEndIndex;
+
+//    GridDDA grid;
     TriangleMesh triangleMesh;
 
 

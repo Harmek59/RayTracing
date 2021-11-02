@@ -1,24 +1,15 @@
 #version 430
 
-bool somethingWentWrong = false;
-
-uniform float gamma = 2.2;
-uniform float exposure = 1.0;
-
 layout(local_size_x = 16, local_size_y = 16) in;
 
-layout(rgba32f, binding = 0) uniform image2D img_color;
-layout(binding = 1) uniform sampler2D shadowMap;
-layout(binding = 2) uniform samplerCube shadowCubeMap;
+//TODO uniforms:
+uniform bool useSkyBox = true;
+uniform bool useFloor = true;
 
-
-layout (binding = 5) uniform SCENE_DATA{
-    int recursionDepth;
-    int numberOfLights;
-    uint beginOfModelsAndGrids;
-    uint endOfModelsAndGrids;
-};
-
+// *********************************************************************************************************************
+// Global settings:
+uniform float gamma = 2.2;
+uniform float exposure = 1.0;
 
 uniform mat4 viewMatrix;
 uniform vec3 cameraPosition;
@@ -34,31 +25,22 @@ ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 
 float INFINITY = 1.0 / 0.0;
 
+bool somethingWentWrong = false;
+
+// *********************************************************************************************************************
+// Types definition:
 struct AABB{
     vec3 begin;
     int modelIndex;// if -1 we did not "hit" model BB yet
     vec3 end;
     uint isValid;
 };
-
-layout (std430, binding = 15) readonly buffer BVH_TREE{
-    AABB bvhTree[];
-};
-
-
-
 struct Material{
     vec3 albedo;
     uint offset1;
     vec3 specular;
     uint offset2;
 };
-layout (std430, binding = 4) readonly buffer MATERIALS
-{
-    Material materials[];
-};
-
-//////////////////////
 struct Triangle{
     uint vertexIndex0;
     uint vertexIndex1;
@@ -68,65 +50,29 @@ struct Triangle{
     uint normalIndex1;
     uint normalIndex2;
     uint offset;
-    uint textureCoordsIndex1;// TODO delete texture coordinates
-    uint textureCoordsIndex2;
-    uint textureCoordsIndex3;
-    uint offset2;
 };
-
-layout (std430, binding = 8) readonly buffer TRIANGLE
-{
-    Triangle triangles[];
-};
-
 struct Vertex{
     vec3 position;
     uint offset;
 };
-layout (std430, binding = 9) readonly buffer VERTEX
-{
-    Vertex vertices[];
-};
-
 struct NormalsFromMesh{
     vec3 normal;
     uint offset;
 };
-layout (std430, binding = 7) readonly buffer NORMAL
-{
-    NormalsFromMesh normals[];
-};
-
 struct Cell {
     uint beginOfTrianglesIndiciesArray;
     uint endOfTrianglesIndiciesArray;
 };
-layout (std430, binding = 11) readonly buffer CELLS
-{
-    Cell cells[];
-};
-
-layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
-{
-    uint trianglesIndicesInGrid[];
-};
-
 struct GridData{
     vec3 gridBegin;
     uint cellsBeginIndex;
     vec3 gridEnd;
     uint cellsEndIndex;
     ivec3 gridResolution;
-    int offset1;
+    uint modelDataId;
     vec3 cellSize;
     int offset2;
 };
-
-layout (std430, binding = 12) readonly buffer GRIDSDATA
-{
-    GridData gridData[];
-};
-
 struct ModelData{
     mat4 positionMatrix;
     mat4 rotationMatrix;
@@ -134,18 +80,12 @@ struct ModelData{
 //    bool whetherToDraw;
     mat4 whetherToDraw;
 };
-layout (std430, binding = 13) readonly buffer MODELDATA{
-    ModelData modelData[];
-};
-
-////////////////////
 struct Ray
 {
     vec3 origin;
     vec3 direction;
     vec3 energy;
 };
-
 struct HitPoint
 {
     vec3 position;
@@ -154,18 +94,6 @@ struct HitPoint
     uint material;
     vec3 uvw;
 };
-
-struct Light
-{
-    vec3 position;
-    float offset1;
-    vec3 color;
-    float offset2;
-    vec3 offset3;
-    float radius;
-
-};
-
 struct Sphere
 {
     vec3 position;
@@ -173,12 +101,59 @@ struct Sphere
     uint material;
 };
 
-layout (std140, binding = 3) uniform LIGHTS
+// *********************************************************************************************************************
+// Bindings:
+layout(rgba32f, binding = 0) uniform image2D img_color;
+layout(binding = 1) uniform sampler2D shadowMap;
+layout(binding = 2) uniform samplerCube shadowCubeMap;
+layout(binding = 3) uniform samplerCube skyBox;
+
+layout (std430, binding = 4) readonly buffer MATERIALS
 {
-    Light      lights[128];
+    Material materials[];
+};
+layout (binding = 5) uniform SCENE_DATA{
+    int recursionDepth;
+    int numberOfLights;
+    uint beginOfModelsAndGrids;
+    uint endOfModelsAndGrids;
+};
+
+layout (std430, binding = 7) readonly buffer NORMAL
+{
+    NormalsFromMesh normals[];
+};
+layout (std430, binding = 8) readonly buffer TRIANGLE
+{
+    Triangle triangles[];
+};
+layout (std430, binding = 9) readonly buffer VERTEX
+{
+    Vertex vertices[];
+};
+layout (std430, binding = 10) readonly buffer TRIANGLE_IN_GRID
+{
+    uint trianglesIndicesInGrid[];
+};
+layout (std430, binding = 11) readonly buffer CELLS
+{
+    Cell cells[];
+};
+layout (std430, binding = 12) readonly buffer GRIDSDATA
+{
+    GridData gridData[];
+};
+layout (std430, binding = 13) readonly buffer MODELDATA{
+    ModelData modelData[];
+};
+
+layout (std430, binding = 15) readonly buffer BVH_TREE{
+    AABB bvhTree[];
 };
 
 
+// *********************************************************************************************************************
+// Function definition:
 ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
     int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
     idx = idx - int(z * gridResolution.x * gridResolution.y);
@@ -223,63 +198,9 @@ vec3 barycentric(vec3 vert0, vec3 vert1, vec3 vert2, vec3 p){
 
 bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit);//return true if we hit and update bestHit only it it is closer
 
-bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 modelMatrix)
-{
-    //https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-    const float EPSILON = 0.0000001;
-    vec3 vertex0 = (modelMatrix * vec4(vertices[triangle.vertexIndex0].position, 1.0f)).xyz;
-    vec3 vertex1 = (modelMatrix * vec4(vertices[triangle.vertexIndex1].position, 1.0f)).xyz;
-    vec3 vertex2 = (modelMatrix * vec4(vertices[triangle.vertexIndex2].position, 1.0f)).xyz;
-    vec3 edge1, edge2, h, s, q;
-    float a, f, u, v;
-    edge1 = vertex1 - vertex0;
-    edge2 = vertex2 - vertex0;
-    //TODO: for now i cant turn it on because refr action will be broken
-    //back face culling
-    vec3 N = cross(edge1, edge2);
-    //    if (dot(ray.direction, N) > 0){
-    //        return false;
-    //    }
+bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 modelMatrix);
 
-    h = cross(ray.direction, edge2);
-    a = dot(edge1, h);
-    if (a > -EPSILON && a < EPSILON)
-    return false;// This ray is parallel to this triangle.
-    f = 1.0/a;
-    s = ray.origin - vertex0;
-    u = f * dot(s, h);
-    if (u < 0.0 || u > 1.0)
-    return false;
-    q = cross(s, edge1);
-    v = f * dot(ray.direction, q);
-    if (v < 0.0 || u + v > 1.0)
-    return false;
-    // At this stage we can compute t to find out where the intersection point is on the line.
-    float t = f * dot(edge2, q);
-
-    if (t > EPSILON && t < bestHit.dist)// ray intersection
-    {
-        bestHit.dist = t;
-        bestHit.position = ray.origin + t * ray.direction;
-
-        vec3 bary = barycentric(vertex0, vertex1, vertex2, bestHit.position);
-        bestHit.normal = bary.x * normals[triangle.normalIndex0].normal + bary.y *
-        normals[triangle.normalIndex1].normal + bary.z * normals[triangle.normalIndex2].normal;
-
-        if (dot(ray.direction, N) > 0){
-            bestHit.normal = - bestHit.normal;
-        }
-
-        bestHit.normal = normalize(bestHit.normal);
-
-        //            bestHit.normal = normalize(cross(edge1, edge2));
-
-        bestHit.material = triangle.material;
-
-        return true;
-    }
-    return false;
-}
+bool intersectFloorPlane(Ray ray, inout HitPoint bestHit);
 
 void main()
 {
@@ -299,13 +220,16 @@ void main()
         color += shade2(ray, hit)* ray.energy;
         ray.energy = ray.energy * materials[hit.material].specular;
 
+        if (hit.dist == INFINITY || ray.energy == vec3(0.0)){
+            break;
+        }
     }
 
 
     color = vec3(1.0) - exp(-color * exposure);
     color = pow(color, vec3(1.0 / gamma));
 
-    if(somethingWentWrong){
+    if (somethingWentWrong){
         color = vec3(1.0, 0.0, 0.0);
     }
 
@@ -350,24 +274,25 @@ HitPoint traceUsingTree(Ray ray){
             if (intersectBox(ray, bvhTree[currentNodeIndex].begin, bvhTree[currentNodeIndex].end, tHitBox) && bestHit.dist > tHitBox){
 
                 if (bvhTree[currentNodeIndex].modelIndex != -1){ //leaf
-//                    somethingWentWrong = true;
+//                                        somethingWentWrong = true;
 
-                    uint i = bvhTree[currentNodeIndex].modelIndex + beginOfModelsAndGrids;// model index
+                    uint i = bvhTree[currentNodeIndex].modelIndex;// model index
                     float tHitBox;
-                    mat4 mocelMatrix =  modelData[i].scaleMatrix;
+                    uint modelIndex = gridData[i].modelDataId;
+                    mat4 mocelMatrix =  modelData[modelIndex].scaleMatrix;
                     Ray ray_cpy = ray;
-                    ray_cpy.origin = vec3(inverse(modelData[i].positionMatrix * modelData[i].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
-                    ray_cpy.direction = vec3(inverse(modelData[i].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
-                    if (modelData[i].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
+                    ray_cpy.origin = vec3(inverse(modelData[modelIndex].positionMatrix * modelData[modelIndex].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
+                    ray_cpy.direction = vec3(inverse(modelData[modelIndex].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
+                    if (modelData[modelIndex].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
                     {
                         if (tHitBox < bestHit.dist){
-                            //ray.direction = mat3(modelData[i].inverseRotate) * ray.direction;
+                            //ray.direction = mat3(modelData[modelIndex].inverseRotate) * ray.direction;
                             float bestHitPrev = bestHit.dist;
                             DDA(ray_cpy, gridData[i], tHitBox, bestHit, mocelMatrix);
                             if (bestHit.dist < bestHitPrev){
                                 //korekcja
-                                bestHit.position = vec3(modelData[i].positionMatrix * modelData[i].rotationMatrix* vec4(bestHit.position, 1.0));
-                                bestHit.normal = vec3(inverse(transpose(modelData[i].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
+                                bestHit.position = vec3(modelData[modelIndex].positionMatrix * modelData[modelIndex].rotationMatrix* vec4(bestHit.position, 1.0));
+                                bestHit.normal = vec3(inverse(transpose(modelData[modelIndex].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
                             }
                         }
                     }
@@ -384,6 +309,8 @@ HitPoint traceUsingTree(Ray ray){
 
     }
 
+    intersectFloorPlane(ray, bestHit);
+
     return bestHit;
 }
 
@@ -392,46 +319,34 @@ HitPoint trace(Ray ray, bool skipLightsBalls)
     HitPoint bestHit;
     bestHit.dist = INFINITY;
 
-    for (uint i = beginOfModelsAndGrids; i<endOfModelsAndGrids; i++){
+    for (uint i = beginOfModelsAndGrids; i<endOfModelsAndGrids + 11; i++){ //TODO +11 bo endOfModels != endOfGrids a ja chce tu endOFGrids
         float tHitBox;
-        mat4 mocelMatrix =  modelData[i].scaleMatrix;
+        uint modelIndex = gridData[i].modelDataId;
+        mat4 mocelMatrix =  modelData[modelIndex].scaleMatrix;
         Ray ray_cpy = ray;
-        ray_cpy.origin = vec3(inverse(modelData[i].positionMatrix * modelData[i].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
-        ray_cpy.direction = vec3(inverse(modelData[i].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
-        if (modelData[i].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
+        ray_cpy.origin = vec3(inverse(modelData[modelIndex].positionMatrix * modelData[modelIndex].rotationMatrix) * vec4(ray_cpy.origin, 1.0));
+        ray_cpy.direction = vec3(inverse(modelData[modelIndex].rotationMatrix) * vec4(ray_cpy.direction, 1.0));
+        if (modelData[modelIndex].whetherToDraw[0][0] == 1 && intersectBox(ray_cpy, (mocelMatrix * vec4(gridData[i].gridBegin, 1.0f)).xyz, (mocelMatrix * vec4(gridData[i].gridEnd, 1.0f)).xyz, tHitBox))
         {
             if (tHitBox < bestHit.dist){
-                //ray.direction = mat3(modelData[i].inverseRotate) * ray.direction;
+                //ray.direction = mat3(modelData[modelIndex].inverseRotate) * ray.direction;
                 float bestHitPrev = bestHit.dist;
                 DDA(ray_cpy, gridData[i], tHitBox, bestHit, mocelMatrix);
                 if (bestHit.dist < bestHitPrev){
                     //korekcja
-                    bestHit.position = vec3(modelData[i].positionMatrix * modelData[i].rotationMatrix* vec4(bestHit.position, 1.0));
-                    bestHit.normal = vec3(inverse(transpose(modelData[i].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
+                    bestHit.position = vec3(modelData[modelIndex].positionMatrix * modelData[modelIndex].rotationMatrix* vec4(bestHit.position, 1.0));
+                    bestHit.normal = vec3(inverse(transpose(modelData[modelIndex].rotationMatrix)) * vec4(bestHit.normal, 1.0f));
                 }
             }
         }
     }
-
-    if (!skipLightsBalls){
-        Sphere sphere;
-
-        sphere.radius = 2.f;
-        sphere.material = 5;
-        for (int i = 0; i<numberOfLights; ++i){
-            sphere.position = lights[i].position;
-            if (intersectRaySphere(ray, sphere, bestHit)){
-                //                materials[5].albedo = lights[i].color;
-            }
-        }
-    }
-
     return bestHit;
 }
 
 void updateRay(inout Ray ray, HitPoint bestHit){
     if (bestHit.dist < INFINITY)
     {
+
         if (bestHit.material == 3){
             ray.origin = bestHit.position - bestHit.normal * 0.001;//move a it position along normal vector to not hit same object due to float precision error
             // shadow-acne !
@@ -441,6 +356,8 @@ void updateRay(inout Ray ray, HitPoint bestHit){
             // shadow-acne !
             ray.direction = normalize(reflect(ray.direction, bestHit.normal));
         }
+    } else {
+        //        ray.energy = vec3(0.0);
     }
 }
 
@@ -508,9 +425,23 @@ vec3 shade2(Ray ray, HitPoint bestHit){
 
         vec3 Diffuse = materials[bestHit.material].albedo;
         float Specular = materials[bestHit.material].specular.x;
+
+        if (bestHit.material == 999){ //if we hit floor
+            int temp1 = int(floor(bestHit.position.x));
+            int temp2 = int(floor(bestHit.position.z));
+            int checkerSize = 20;
+            if(mod(round(temp1/checkerSize + temp2/checkerSize), 2) == 1){
+                Diffuse = vec3(3.);
+            }else{
+                Diffuse = vec3(1.);
+            }
+        }
+
         vec3 ambient  = Diffuse * 0.1;// hard-coded ambient component
+        color += ambient;
         vec3 viewDir  = normalize(ray.origin - bestHit.position);
         //        directional
+        if(true)
         {
             // diffuse
             //    vec3 lightDir = normalize(lights[i].Position - FragPos);
@@ -524,6 +455,7 @@ vec3 shade2(Ray ray, HitPoint bestHit){
             float shadow = (1. -ShadowCalculation(lightSpaceMatrix * vec4(bestHit.position, 1.0), bestHit.position, bestHit.normal));
             color += shadow * (ambient + diffuse + specular);
         }
+        if (false)
         {
             vec3 pointLightPos = vec3(-20.0, 20.0, -20.0);
             vec3 lightDir = normalize(pointLightPos - bestHit.position);
@@ -547,7 +479,11 @@ vec3 shade2(Ray ray, HitPoint bestHit){
     }
     else
     {
-        return vec3(0.0);
+        if (useSkyBox){
+            return texture(skyBox, normalize(ray.direction)).rgb;
+        } else {
+            return vec3(0.3);
+        }
     }
 }
 
@@ -557,39 +493,24 @@ vec3 shade(Ray ray, HitPoint bestHit){
         if (bestHit.material == 5){ //if we hit light
             return materials[bestHit.material].albedo;
         }
-
-        vec3 color = materials[bestHit.material].albedo;
-
+        vec3 color = vec3(0.0);
 
         bool globalLight = true;
         if (globalLight){
-            bool useShadowMap = true;
             float lightIntensity = 0.8;
 
-            if (useShadowMap){
-                //TODO fix light direction
-                vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
-                float shadow = (1. -ShadowCalculation(lightSpaceMatrix * vec4(bestHit.position, 1.0), bestHit.position, bestHit.normal));
-                color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * shadow * lightIntensity;
-            } else {
-                Ray shadowRay;
+            Ray shadowRay;
 
-                vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
+            vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
 
-                shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
-                shadowRay.direction = -directionalLight;
+            shadowRay.origin = bestHit.position + 0.001 * bestHit.normal;
+            shadowRay.direction = -directionalLight;
 
-                HitPoint shadowHit = trace(shadowRay, true);
-                if (!(shadowHit.dist < INFINITY)){
-                    color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
-                }
+            HitPoint shadowHit = trace(shadowRay, true);
+            if (!(shadowHit.dist < INFINITY)){
+                color += clamp(dot(bestHit.normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
             }
         }
-
-        vec3 pointLightPos = vec3(-20.0, 20.0, -20.0);
-        float pointLightIntensity = 0.6;
-        float shadow = (1. - ShadowCalculationCubeMap(bestHit.position, pointLightPos));
-        color += clamp(dot(bestHit.normal, -(pointLightPos - bestHit.position)) * -1, 0.0, 1.0) * shadow * pointLightIntensity;
         //        for (int i = 0; i<numberOfLights; ++i){
         //            float dist = length(bestHit.position - lights[i].position);
         //            if (dist < lights[i].radius){
@@ -694,9 +615,6 @@ void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit, mat4 mod
     vec3 gridBegin = (modelMatrix * vec4(grid.gridBegin, 1.0f)).xyz;
 
     vec3 rayOrigCell =  (ray.origin + ray.direction * tHitBox) - gridBegin;
-    //    cell.x = int(clamp(floor(float(rayOrigCell.x) / grid.cellSize.x), 0, grid.gridResolution.x - 1));
-    //    cell.y = int(clamp(floor(float(rayOrigCell.y) / grid.cellSize.y), 0, grid.gridResolution.y - 1));
-    //    cell.z = int(clamp(floor(float(rayOrigCell.z) / grid.cellSize.z), 0, grid.gridResolution.z - 1));
 
     vec3 cellSize = grid.cellSize * vec3(modelMatrix[0][0], modelMatrix[1][1], modelMatrix[2][2]);
 
@@ -752,9 +670,11 @@ void DDA(Ray ray, GridData grid, float tHitBox, inout HitPoint bestHit, mat4 mod
             vec3 cellPosition = vec3(cell) * cellSize + gridBegin + cellSize/2.;
             float distanceToCell = distance(ray.origin, cellPosition) - length(cellSize/2.);
 
-            if (bestHit.dist < distanceToCell){
-                return;
-            }
+            //nie wiem czemu tu to jest, ale byl bug z kopytami, a po usunieciu dziala
+            // i jeszcze prawie dwukrotnie pogorsza performence XD
+//            if (bestHit.dist < distanceToCell){
+//                return;
+//            }
         }
 
         uint k = (int(nextCrossingT.x < nextCrossingT.y) << 2) +
@@ -806,4 +726,79 @@ bool intersectRaySphere(Ray ray, Sphere sphere, inout HitPoint bestHit)
         bestHit.material = sphere.material;
     }
     return true;
+}
+
+bool intersectTriangle(Ray ray, Triangle triangle, inout HitPoint bestHit, mat4 modelMatrix)
+{
+    //https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+    const float EPSILON = 0.0000001;
+    vec3 vertex0 = (modelMatrix * vec4(vertices[triangle.vertexIndex0].position, 1.0f)).xyz;
+    vec3 vertex1 = (modelMatrix * vec4(vertices[triangle.vertexIndex1].position, 1.0f)).xyz;
+    vec3 vertex2 = (modelMatrix * vec4(vertices[triangle.vertexIndex2].position, 1.0f)).xyz;
+    vec3 edge1, edge2, h, s, q;
+    float a, f, u, v;
+    edge1 = vertex1 - vertex0;
+    edge2 = vertex2 - vertex0;
+
+    // TODO back face culling but it can be hard
+    vec3 N = cross(edge1, edge2);
+    //        if (dot(ray.direction, N) > 0){
+    //
+    //            return false;
+    //        }
+
+    h = cross(ray.direction, edge2);
+    a = dot(edge1, h);
+    if (a > -EPSILON && a < EPSILON)
+    return false;// This ray is parallel to this triangle.
+    f = 1.0/a;
+    s = ray.origin - vertex0;
+    u = f * dot(s, h);
+    if (u < 0.0 || u > 1.0)
+    return false;
+    q = cross(s, edge1);
+    v = f * dot(ray.direction, q);
+    if (v < 0.0 || u + v > 1.0)
+    return false;
+    // At this stage we can compute t to find out where the intersection point is on the line.
+    float t = f * dot(edge2, q);
+
+    if (t > EPSILON && t < bestHit.dist)// ray intersection
+    {
+        bestHit.dist = t;
+        bestHit.position = ray.origin + t * ray.direction;
+
+        vec3 bary = barycentric(vertex0, vertex1, vertex2, bestHit.position);
+        bestHit.normal = bary.x * normals[triangle.normalIndex0].normal + bary.y *
+        normals[triangle.normalIndex1].normal + bary.z * normals[triangle.normalIndex2].normal;
+
+        if (dot(ray.direction, N) > 0){
+            bestHit.normal = - bestHit.normal;
+        }
+        bestHit.normal = normalize(bestHit.normal);
+        bestHit.material = triangle.material;
+
+        return true;
+    }
+    return false;
+}
+
+bool intersectFloorPlane(Ray ray, inout HitPoint bestHit){
+    // assuming vectors are all normalized
+    vec3 n = vec3(0., 1., 0.);
+    vec3 p0 = vec3(0.0, -100.0, 0.0);
+    float denom = dot(n, ray.direction);
+//    if (denom > 1e-6) {   //if i leave if (plane will be visible only from one side
+        vec3 p0l0 = p0 - ray.origin;
+        float t = dot(p0l0, n) / denom;
+        if(t >= 0. && t < bestHit.dist){
+            bestHit.dist = t;
+            bestHit.position = ray.origin + t * ray.direction;
+            bestHit.normal = n;
+            bestHit.material = 999;
+            return true;
+        }
+//    }
+
+    return false;
 }

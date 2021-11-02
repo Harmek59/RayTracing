@@ -26,6 +26,8 @@ public:
 
     static void enableFaceCulling();
 
+    static void enableDepthTest();
+
     static void preFrameLogic();
 
     static void postFrameLogic();
@@ -54,7 +56,7 @@ private:
 
     inline static std::unique_ptr<OpenGLHandler> oglHandler;
     inline static Camera camera = Camera(windowWidth, windowHeight, 45.f, 0.1f, 4096.f);
-    
+
     inline static FrameCounter frameCounter;
 
     inline static bool mouseCaptured = true;

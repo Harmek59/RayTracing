@@ -9,6 +9,9 @@
 
 #include <iostream>
 
+
+#include <glm/gtx/string_cast.hpp>
+
 std::pair<glm::vec3, glm::vec3> triangleBoundingBox(const TriangleMesh::Triangle &t);
 
 class GridDDA {
@@ -24,11 +27,13 @@ public:
         glm::vec3 gridEnd;
         uint32_t cellsEndIndex;
         glm::ivec3 gridResolution;
-        uint32_t : 32;
+        uint32_t modelDataId;
         glm::vec3 cellSize;
         uint32_t : 32;
     };
+
     GridDDA() = default;
+
     GridDDA(const TriangleMesh &mesh);
 
     static void
@@ -42,11 +47,11 @@ public:
         bindOneBuffer(gridDataBuffer, gridDataArray, gridDataBinding);
     }
 
-    int getNumberOfCells() const{
+    int getNumberOfCells() const {
         return int(std::distance(beginOfCellsArray, endOfCellsArray));
     }
 
-    GridData getGridData() const{
+    GridData getGridData() const {
         return gridData;
     }
 
@@ -97,5 +102,7 @@ public:
     glm::vec3 cellSize;
 
     GridData gridData;
+
+    int gridDataIndex;
 };
 

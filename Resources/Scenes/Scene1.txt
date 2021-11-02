@@ -7,5 +7,6 @@
 ../Resources/meshes/renifer.obj 30. -50. -30. 50. 50. 50. 3
 ../Resources/meshes/tree.obj 0. -20. -60. 50. 50. 50. 1
 ../Resources/meshes/FinalBaseMesh.obj -40. -20. -90. 50. 50. 50. 3
-../Resources/meshes/floor_3walls.obj -40. -35. -90. 200. 75. 200. 0
-../Resources/meshes/skeleton.obj -100. -20. -60. 30. 30. 30. 0
+#../Resources/meshes/floor_3walls.obj -40. -35. -90. 200. 75. 200. 0
+../Resources/meshes/dragon_50k.obj -100. -20. -60. 30. 30. 30. 0
+../Resources/meshes/pajonk.obj -90. -20. -120. 60. 60. 60. 4
