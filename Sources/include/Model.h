@@ -12,7 +12,7 @@
 class Model {
 public:
     Model(const std::string &path, glm::vec3 position, glm::vec3 scale = glm::vec3(1.0f), uint32_t materialID = 0) {
-        gridsBeginIndex = GridDDA::gridDataArray.size();
+        gridsBeginIndex = uint32_t(GridDDA::gridDataArray.size());
         GridDDA grid;
         std::tie(triangleMesh, grid) = loadObjMesh(path, position, scale, materialID);
 
@@ -51,7 +51,7 @@ public:
 //            gd.cellsBeginIndex += gd.gridResolution.z * grid.gridData.gridResolution.y * grid.gridData.gridResolution.x;
 //            GridDDA::gridDataArray.push_back(gd);
         }
-        gridsEndIndex = GridDDA::gridDataArray.size();
+        gridsEndIndex = uint32_t(GridDDA::gridDataArray.size());
     }
 
     Model(const Model &model, glm::vec3 position, glm::vec3 scale) {
@@ -67,17 +67,17 @@ public:
         triangleMesh = model.triangleMesh;
 
 
-        gridsBeginIndex = GridDDA::gridDataArray.size();
+        gridsBeginIndex = uint32_t(GridDDA::gridDataArray.size());
         std::vector<GridDDA::GridData> temp;
 
 
-        for (int i = model.gridsBeginIndex; i < model.gridsEndIndex; i++) {
+        for (auto i = model.gridsBeginIndex; i < model.gridsEndIndex; i++) {
             temp.push_back(GridDDA::gridDataArray[i]);
             temp.back().modelDataId = modelDataIndex;
         }
 
         std::move(temp.begin(), temp.end(), std::back_inserter(GridDDA::gridDataArray));
-        gridsEndIndex = GridDDA::gridDataArray.size();
+        gridsEndIndex = uint32_t(GridDDA::gridDataArray.size());
     }
 
     std::pair<TriangleMesh, GridDDA>

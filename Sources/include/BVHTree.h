@@ -64,7 +64,7 @@ public:
             modelMatrix = modelsArray[i].getPositionMatrix() * modelsArray[i].getRotationMatrix() *
                           modelsArray[i].getScaleMatrix();
 
-            for(int j = modelsArray[i].gridsBeginIndex; j <modelsArray[i].gridsEndIndex; j++){
+            for(int j = modelsArray[i].gridsBeginIndex; j <int(modelsArray[i].gridsEndIndex); j++){
                 auto bbMin = GridDDA::gridDataArray[j].gridBegin;
                 auto bbMax = GridDDA::gridDataArray[j].gridEnd;
 

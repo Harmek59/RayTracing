@@ -115,5 +115,5 @@ GridDDA::GridDDA(const TriangleMesh &mesh) {
 
 
     gridDataArray.push_back(gridData);
-    gridDataIndex = gridDataArray.size() - 1;
+    gridDataIndex = uint32_t(gridDataArray.size() - 1);
 }

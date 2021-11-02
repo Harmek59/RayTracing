@@ -55,10 +55,10 @@ public:
             {
                 ImGui::TableNextColumn();
                 {
-                    ImGui::Text(GPUName.c_str());
+                    ImGui::Text("%s", GPUName.c_str());
                     ImGui::Text("FPS: %d", avgFps);
                     ImGui::Text("Frame time: %f ms", avgFrameTime * 1000);
-                    ImGui::Text(std::string(
+                    ImGui::Text("%s", std::string(
                             "Camera position: " + glm::to_string(CoreEngine::getCamera().getPosition())).c_str());
                     ImGui::Text("OpenGL errors: %s", oglErr.c_str());
 

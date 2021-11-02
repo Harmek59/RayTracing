@@ -113,7 +113,7 @@ public:
     int getNumbersOfCells() const {
         int nmbr = 0;
         for (const auto &m: models) {
-            for(int i = m.gridsBeginIndex; i < m.gridsEndIndex; i++){
+            for(auto i = m.gridsBeginIndex; i < m.gridsEndIndex; i++){
                 const auto & grid = GridDDA::gridDataArray[i];
                 nmbr += grid.cellsEndIndex - grid.cellsBeginIndex;
             }
