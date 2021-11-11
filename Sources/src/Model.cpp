@@ -1,7 +1,9 @@
 #include "Model.h"
 #include <tiny_obj_loader.h>
 
- glm::mat4 Model::getModelMatrix() const {
+#include "DDAGridsCreator.h"
+
+glm::mat4 Model::getModelMatrix() const {
     glm::mat4 model = glm::mat4(1.);
     model = glm::translate(model, position);
     model = glm::scale(model, scale);
@@ -40,7 +42,7 @@ void Model::updateModelData() {
     }
 }
 
-std::pair<TriangleMesh, GridDDA>
+std::tuple<TriangleMesh, std::vector<GridDDA::GridData>, std::vector<GridDDA::Cell>>
 Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multiplier, uint32_t materialID) {
 
     std::cout << "========================================\n";
@@ -51,7 +53,7 @@ Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multip
     std::string warn, err;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
-        std::cout<<warn + err<<std::endl;
+        std::cout << warn + err << std::endl;
         throw std::runtime_error(warn + err);
     }
 
@@ -129,7 +131,17 @@ Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multip
     TriangleMesh triangleMesh(std::move(vertices), std::move(triangles), std::move(normals), std::move(texCoords));
     triangleMesh.normalize();
 
-    GridDDA grid(triangleMesh);
+    DDAGridsCreator gridsCreator;
+    auto[gridData, cellsArr] = gridsCreator.calculateBaseGridAndCells(triangleMesh);
+    bool splitMesh = true;
+    if (splitMesh) {
+        auto[splittedGridDataArr, splittedCellsArr] = gridsCreator.baseGridSplitter(gridData, cellsArr);
+        return std::make_tuple<TriangleMesh, std::vector<GridDDA::GridData>, std::vector<GridDDA::Cell>>(
+                std::move(triangleMesh),
+                std::move(splittedGridDataArr), std::move(splittedCellsArr));
+    } else {
+        return std::make_tuple<TriangleMesh, std::vector<GridDDA::GridData>, std::vector<GridDDA::Cell>>(
+                std::move(triangleMesh), {gridData}, std::move(cellsArr));
+    }
 
-    return std::make_pair(triangleMesh, grid);
 }

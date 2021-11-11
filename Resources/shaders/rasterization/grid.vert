@@ -1,15 +1,12 @@
 #version 430
 
-uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
+uniform int modelDataIndex;
+uniform int gridDataIndex;
 
-layout (binding = 5) uniform SCENE_DATA{
-    int recursionDepth;
-    int numberOfLights;
-    uint beginOfModelsAndGrids;
-    uint endOfModelsAndGrids;
+layout (binding = 6) uniform GLOBAL_SETTINGS{
+    mat4 viewMatrix;
 };
-
 
 struct Cell {
     uint beginOfTrianglesIndiciesArray;
@@ -35,13 +32,6 @@ layout (std430, binding = 12) readonly buffer GRIDSDATA
     GridData gridData[];
 };
 
-ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
-    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
-    idx = idx - int(z * gridResolution.x * gridResolution.y);
-    int y = int(float(idx) / float(gridResolution.x));
-    int x = int(mod(float(idx), float(gridResolution.x)));
-    return ivec3(x, y, z);
-}
 
 struct ModelData{
     mat4 positionMatrix;
@@ -58,35 +48,33 @@ layout (std430, binding = 13) readonly buffer MODELDATA{
 };
 
 
+ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
+    int z = int(float(idx) / float(gridResolution.x * gridResolution.y));
+    idx = idx - int(z * gridResolution.x * gridResolution.y);
+    int y = int(float(idx) / float(gridResolution.x));
+    int x = int(mod(float(idx), float(gridResolution.x)));
+    return ivec3(x, y, z);
+}
 out vec3 color;
 
 out vec3 cellSize;
 
-out mat4 modelMatrix;
+out mat4 modelViewProjectionMatrix;
 
 void main(){
+    mat4 modelMatrix = modelData[modelDataIndex].positionMatrix * modelData[modelDataIndex].rotationMatrix * modelData[modelDataIndex].scaleMatrix;
+    modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
-    int modelID = int(beginOfModelsAndGrids);
-    for (int i = int(beginOfModelsAndGrids); i<int(endOfModelsAndGrids); i++){
-        if (gl_VertexID >= gridData[i].cellsEndIndex){
-            modelID++;
-        } else {
-            break;
-        }
-    }
-    modelMatrix = modelData[modelID].positionMatrix * modelData[modelID].rotationMatrix * modelData[modelID].scaleMatrix;
-
-    GridData grid = gridData[modelID];
-
-
+    GridData grid = gridData[gridDataIndex];
 
     cellSize = grid.cellSize;
 
-    uint cellIndex = gl_VertexID - grid.cellsBeginIndex;
+    uint localCellIndex = gl_VertexID;
+    uint globalCellIndex = localCellIndex + grid.cellsBeginIndex;
 
-    vec3 cellPosition = vec3(cellsIndexTo3D(cellIndex, grid.gridResolution)) * grid.cellSize + grid.gridBegin;
+    vec3 cellPosition = vec3(cellsIndexTo3D(localCellIndex, grid.gridResolution)) * grid.cellSize + grid.gridBegin;
 
-    if (cells[gl_VertexID].beginOfTrianglesIndiciesArray == cells[gl_VertexID].endOfTrianglesIndiciesArray){
+    if (cells[globalCellIndex].beginOfTrianglesIndiciesArray == cells[globalCellIndex].endOfTrianglesIndiciesArray){
         color = vec3(1.0, 0.0, 0.0);
     } else {
         color = vec3(0.0, 1.0, 0.0);

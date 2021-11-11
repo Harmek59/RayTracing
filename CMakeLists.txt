@@ -15,10 +15,11 @@ find_path(STB_INCLUDE_DIRS "stb.h")
 find_package(tinyobjloader CONFIG REQUIRED)
 
 #----------------------------------------------------------------------------
-include_directories(${PROJECT_SOURCE_DIR}/Sources/include ${PROJECT_SOURCE_DIR}/Sources/core ${PROJECT_SOURCE_DIR}/Sources/ogl)
-file(GLOB SOURCES "Sources/src/*.cpp" "Sources/core/*.cpp" "Sources/ogl/*.cpp")
-
+#file(GLOB SOURCES "Sources/src/*.cpp" "Sources/core/*.cpp" "Sources/ogl/*.cpp" "Sources/app/*.cpp")
+file(GLOB_RECURSE SOURCES Sources/*.cpp)
+file(GLOB_RECURSE HEADERS Sources/*.h)
 #----------------------------------------------------------------------------
+include_directories(${PROJECT_SOURCE_DIR}/Sources/include ${PROJECT_SOURCE_DIR}/Sources/core ${PROJECT_SOURCE_DIR}/Sources/ogl ${PROJECT_SOURCE_DIR}/Sources/app)
 add_executable(${PROJECT_NAME} Sources/main.cpp ${SOURCES})
 
 #----------------------------------------------------------------------------

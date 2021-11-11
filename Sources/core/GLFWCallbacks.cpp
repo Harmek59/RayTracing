@@ -1,5 +1,5 @@
 #include "GLFWCallbacks.h"
-#include "CoreEngine.h"
+#include "Core.h"
 
 void GLFWCallbacks::framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -9,8 +9,8 @@ void GLFWCallbacks::framebuffer_size_callback(GLFWwindow* window, int width, int
 
 void GLFWCallbacks::mouse_callback(GLFWwindow* window, double xPos, double yPos)
 {
-    if(CoreEngine::isMouseCaptured())
+    if(Core::isMouseCaptured())
         camera.processMouseMovement(static_cast<float>(xPos), static_cast<float>(yPos));
 }
 
-Camera& GLFWCallbacks::camera = CoreEngine::getCamera();
+Camera& GLFWCallbacks::camera = Core::getCamera();

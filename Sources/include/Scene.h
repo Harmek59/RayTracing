@@ -5,10 +5,10 @@
 #include "Model.h"
 #include "Buffer.h"
 #include "FrameBuffer.h"
-#include <imgui.h>
 #include "DirectionalSadow.h"
 #include "PointShadow.h"
 #include "BVHTree.h"
+#include <imgui.h>
 
 
 class Scene {
@@ -16,82 +16,28 @@ public:
 
     Scene(const std::string &path) {
         setUp(path);
-        bvhTree = BVHTree(int(models.size() * 5)); // TODO delete 5
+        bvhTree = BVHTree(getNumbersOfGrids()); // TODO delete 5
     }
 
-    void setUp(const std::string &path) {
-        sceneData.beginOfModelsAndGrids = uint32_t(Model::modelDataArray.size());
-        sceneData.beginOfModelsAndGrids = uint32_t(GridDDA::gridDataArray.size());
-        std::cout << "Loading scene:\n";
-        std::ifstream sceneFile(path);
-        if (sceneFile.is_open()) {
-            int lastOriginalIdx = -1; // last one which is not instance of previous
-            while (true) {
-                std::string meshPath;
-                sceneFile >> meshPath;
-
-                if (sceneFile.eof()) break; // this is here only in case user will leave extra empty line at the end of file
-
-                if (meshPath[0] == '#') { //comment
-                    getline(sceneFile, meshPath); //load all remaining data from that line
-                    continue;
-                }
-
-                glm::vec3 position;
-                sceneFile >> position.x >> position.y >> position.z;
-
-                glm::vec3 scale;
-                sceneFile >> scale.x >> scale.y >> scale.z;
-
-                int material;
-                sceneFile >> material;
-
-                if (meshPath[0] == '!' && lastOriginalIdx != -1) {
-                    models.emplace_back(models[lastOriginalIdx], position, scale);
-                    models.back().triangleMesh.bbBegin = models[lastOriginalIdx].triangleMesh.bbBegin;
-                    models.back().triangleMesh.bbEnd = models[lastOriginalIdx].triangleMesh.bbEnd;
-                } else {
-                    models.emplace_back(meshPath, position, scale, material);
-
-                    lastOriginalIdx = int(models.size() - 1);
-                }
-
-                if (sceneFile.eof()) break;
-            }
-        }
-        sceneData.endOfModelsAndGrids = uint32_t(Model::modelDataArray.size());
-        sceneData.endOfModelsAndGrids = uint32_t(GridDDA::gridDataArray.size());
-
-//        std::cout << "Scene summarize:\n";
-//        std::cout << "\tnumber of models: " << sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids << " ("
-//                  << sceneData.beginOfModelsAndGrids << " - " << sceneData.endOfModelsAndGrids << ")\n";
-//        std::cout << "\tnumber of triangles: " << getNumbersOfTriangles() << " ("
-//                  << Model::modelDataArray[sceneData.beginOfModelsAndGrids].beginEndTriangles.x << " - " <<
-//                  Model::modelDataArray[sceneData.endOfModelsAndGrids - 1].beginEndTriangles.y << ")\n";
-
-
-        TriangleMesh::bindBuffers(8, 9, 7, 6);
-        GridDDA::bindBuffers(10, 11, 12);
-        Model::bindBuffers(13);
-
-        bindSceneDataBufferBase(5);
-    }
+    void setUp(const std::string &path);
 
     void atFrameBegin(double deltaTime) {
         updateSceneDataBuffer();
         updateModelData();
         Model::updateBuffers();
-        ImGui::SliderInt("lights number", &sceneData.numberOfLights, 0, 20);
-        ImGui::SliderInt("recursion depth", &sceneData.recursionDepth, 0, 20);
 
-        directionalShadow.generateShadow(getNumbersOfTriangles());
-        pointShadow.generateShadow(getNumbersOfTriangles());
+        directionalShadow.generateShadow(models);
+        pointShadow.generateShadow(models);
 
         bvhTree.createFromModels(models);
         bvhTree.bindBuffer(15);
     }
 
     auto &getModels() {
+        return models;
+    }
+
+    const auto &getModels() const {
         return models;
     }
 
@@ -113,10 +59,18 @@ public:
     int getNumbersOfCells() const {
         int nmbr = 0;
         for (const auto &m: models) {
-            for(auto i = m.gridsBeginIndex; i < m.gridsEndIndex; i++){
-                const auto & grid = GridDDA::gridDataArray[i];
+            for (auto i = m.gridsBeginIndex; i < m.gridsEndIndex; i++) {
+                const auto &grid = GridDDA::gridDataArray[i];
                 nmbr += grid.cellsEndIndex - grid.cellsBeginIndex;
             }
+        }
+        return nmbr;
+    }
+
+    int getNumbersOfGrids() const {
+        int nmbr = 0;
+        for (const auto &m: models) {
+            nmbr += m.getNumberOfGrids();
         }
         return nmbr;
     }
@@ -125,14 +79,12 @@ public:
 //        return sceneData.endOfModelsAndGrids - sceneData.beginOfModelsAndGrids;
 //    }
 
-    const auto& getTree() const{
+    const auto &getTree() const {
         return bvhTree;
     }
 
 private:
     struct SceneData {
-        int recursionDepth = 3;
-        int numberOfLights = 0;
         uint32_t beginOfModelsAndGrids = 0;
         uint32_t endOfModelsAndGrids = 0;
 

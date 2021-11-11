@@ -4,9 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <vector>
-
-#include "Texture2D.h"
-#include "TextureCubeMap.h"
+#include "TextureInterface.h"
 
 class FrameBuffer {
 public:
@@ -25,11 +23,7 @@ public:
 
     GLuint getFrameBufferID();
 
-    //TODO create Texture base class
-    void attachTextureToBuffer(Texture2D &texture, GLenum textureAttachment = GL_COLOR_ATTACHMENT0,
-                               std::vector<GLenum> drawBuffers = {GL_COLOR_ATTACHMENT0});
-
-    void attachTextureToBuffer(TextureCubeMap &texture, GLenum textureAttachment = GL_COLOR_ATTACHMENT0,
+    void attachTextureToBuffer(TextureInterface &texture, GLenum textureAttachment = GL_COLOR_ATTACHMENT0,
                                std::vector<GLenum> drawBuffers = {GL_COLOR_ATTACHMENT0});
 
     void bind();

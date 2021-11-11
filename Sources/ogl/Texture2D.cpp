@@ -7,46 +7,21 @@
 
 Texture2D::Texture2D(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                      unsigned char *data) {
-    create();
     setTextureParameters();
     setTextureData(width, height, internalformat, format, type, data);
 }
 
 Texture2D::Texture2D(const std::string &fileName) {
-    create();
     setTextureParameters();
     loadDataFromFile(fileName);
 }
 
-Texture2D::~Texture2D() {
-    remove();
-}
-
-Texture2D::Texture2D(Texture2D &&toMove) {
-    remove();
-    textureID = std::exchange(toMove.textureID, 0);
-}
-
-Texture2D &Texture2D::operator=(Texture2D &&toMove) {
-    remove();
-    textureID = std::exchange(toMove.textureID, 0);
-    return *this;
-}
-
 void Texture2D::bind() {
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    glBindTexture(GL_TEXTURE_2D, getTextureID());
 }
 
 void Texture2D::unBind() {
     glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-GLuint Texture2D::getTextureID() {
-    return textureID;
-}
-
-void Texture2D::create() {
-    glGenTextures(1, &textureID);
 }
 
 void Texture2D::setTextureParameters() {
@@ -90,10 +65,3 @@ void Texture2D::loadDataFromFile(const std::string &fileName) {
     stbi_image_free(data);
     unBind();
 }
-
-
-void Texture2D::remove() {
-    glDeleteTextures(1, &textureID);
-    textureID = 0;
-}
-

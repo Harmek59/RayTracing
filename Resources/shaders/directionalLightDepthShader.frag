@@ -4,10 +4,9 @@ flat in int discardTriangle;
 
 void main()
 {
-    if(discardTriangle == 0){
+    if (discardTriangle == 0){
         discard;
-    } else{
+    } else {
         gl_FragDepth = gl_FragCoord.z;
     }
-//     gl_FragDepth = gl_FragCoord.z;
 }

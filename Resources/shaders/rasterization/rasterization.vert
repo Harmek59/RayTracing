@@ -1,19 +1,14 @@
 #version 430
 
-uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
+uniform mat4 customViewMatrixProjection;
+uniform bool useCustomViewProjectionMatrix = false;
+uniform int modelDataIndex;
 
-uniform vec3 cameraPosition;
-
-uniform int imageWidth = 1280;
-uniform int imageHeight = 720;
-
-
-layout (binding = 5) uniform SCENE_DATA{
-    int recursionDepth;
-    int numberOfLights;
-    uint beginOfModelsAndGrids;
-    uint endOfModelsAndGrids;
+layout (binding = 6) uniform GLOBAL_SETTINGS{
+    mat4 viewMatrix;
+    mat4 inverseViewMatrix;
+    mat4 lightSpaceMatrix;  //TODO zaimplementowac proste oswietlenie za pomoca tej macierz (na razie kierunek swiatla nie jest na podstawie macierzy)
 };
 
 struct Triangle{
@@ -64,30 +59,15 @@ layout (std430, binding = 13) readonly buffer MODELDATA{
     ModelData modelData[];
 };
 
-out int discardTriangle;
-
-out vec3 FragPos;
-flat out vec3 Normal;
+flat out int discardTriangle;
+flat out vec3 normal;
 
 void main(){
-    uint triangleId = gl_VertexID/3;
+    uint triangleId = gl_VertexID/3 + modelData[modelDataIndex].brginEndTriangles.x;
     uint vertexId = int(mod(gl_VertexID, 3));
 
-    uint trianglesSkipped = 0;
-    uint localTriangleID = 0;
-    int modelID = int(beginOfModelsAndGrids);
-    for (int i = int(beginOfModelsAndGrids); i<int(endOfModelsAndGrids); i++){
-        uint trianglesInModel = modelData[i].brginEndTriangles.y - modelData[i].brginEndTriangles.x;
-        trianglesSkipped += trianglesInModel;
-        if (triangleId >= trianglesSkipped){
-            modelID++;
-        } else {
-            localTriangleID = triangleId - trianglesSkipped + trianglesInModel;
-            break;
-        }
-    }
 
-    Triangle trgl = triangles[localTriangleID + modelData[modelID].brginEndTriangles.x];
+    Triangle trgl = triangles[triangleId];
     Vertex vert;
     NormalsFromMesh norm;
     if (vertexId == 0){
@@ -98,16 +78,18 @@ void main(){
         norm = normals[trgl.normalIndex1];
     } else {
         vert = vertices[trgl.vertexIndex2];
-        norm = normals[trgl.normalIndex0];
+        norm = normals[trgl.normalIndex2];
     }
 
-    mat4 model = modelData[modelID].positionMatrix * modelData[modelID].rotationMatrix * modelData[modelID].scaleMatrix;
-    discardTriangle = int(modelData[modelID].whetherToDraw[0]);
+    mat4 model = modelData[modelDataIndex].positionMatrix * modelData[modelDataIndex].rotationMatrix * modelData[modelDataIndex].scaleMatrix;
+    discardTriangle = int(modelData[modelDataIndex].whetherToDraw[0]);
 
-    FragPos = vert.position;
-    Normal = norm.normal;
+    normal = norm.normal;
 
-    gl_Position = projectionMatrix * viewMatrix * model * vec4(vert.position, 1.0f);
+    mat4 viewProjMat;
+    if(useCustomViewProjectionMatrix) viewProjMat = customViewMatrixProjection;
+    else viewProjMat = projectionMatrix * viewMatrix;
+    gl_Position = viewProjMat * model * vec4(vert.position, 1.0f);
 
 }
 

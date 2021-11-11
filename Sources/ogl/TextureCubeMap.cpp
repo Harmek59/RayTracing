@@ -7,35 +7,16 @@
 
 TextureCubeMap::TextureCubeMap(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                                const std::array<uint8_t *, 6> &data) {
-    create();
     setTextureParameters();
     setTextureData(width, height, internalformat, format, type, data);
 }
 
 TextureCubeMap::TextureCubeMap(const std::array<std::string, 6> &fileNameArr) {
-    create();
     setTextureParameters();
     loadDataFromFile(fileNameArr);
 }
 
-TextureCubeMap::~TextureCubeMap() {
-    remove();
-}
 
-TextureCubeMap::TextureCubeMap(TextureCubeMap &&toMove) {
-    remove();
-    textureID = std::exchange(toMove.textureID, 0);
-}
-
-TextureCubeMap &TextureCubeMap::operator=(TextureCubeMap &&toMove) {
-    remove();
-    textureID = std::exchange(toMove.textureID, 0);
-    return *this;
-}
-
-void TextureCubeMap::create() {
-    glGenTextures(1, &textureID);
-}
 
 void TextureCubeMap::setTextureParameters() {
     bind();
@@ -60,21 +41,14 @@ void TextureCubeMap::setTextureData(uint32_t width, uint32_t height, GLint inter
 }
 
 void TextureCubeMap::bind() {
-    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, getTextureID());
 }
 
 void TextureCubeMap::unBind() {
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 }
 
-GLuint TextureCubeMap::getTextureID() {
-    return textureID;
-}
 
-void TextureCubeMap::remove() {
-    glDeleteTextures(1, &textureID);
-    textureID = 0;
-}
 
 void TextureCubeMap::loadDataFromFile(const std::array<std::string, 6> &fileNameArr) {
     bind();

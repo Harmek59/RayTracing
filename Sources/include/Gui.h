@@ -1,10 +1,31 @@
 #pragma once
 
-#include "CoreEngine.h"
+#include "Core.h"
 #include "imgui.h"
 #include "glm/gtx/string_cast.hpp"
 #include <map>
-#include <DisplayModeInterface.h>
+#include <DisplayModes/DisplayModeInterface.h>
+
+
+struct GlobalSettings {
+    glm::mat4 viewMatrix;
+    glm::mat4 inverseViewMatrix;
+    glm::mat4 lightSpaceMatrix;
+    glm::vec3 cameraPosition;
+    float fov = 45.;
+
+    int recursionDepth;
+    int numberOfLights;
+
+    float gamma = 2.2f;
+    float exposure = 1.f;
+
+    uint32_t imageWidth = 1280;
+    uint32_t imageHeight = 720;
+
+    uint32_t useSkyBox = 1;  //TODO I think bool in glsl require 32 bits, but check it
+    uint32_t useFloor = 1;
+};
 
 class Gui {
 public:
@@ -24,7 +45,7 @@ public:
     }
 
     void drawMainInterface(const std::map<std::string, DisplayModeInterface *> &displayModes,
-                           DisplayModeInterface ** displayMode, bool &pause) {
+                           DisplayModeInterface **displayMode, GlobalSettings &globalSettings) {
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(1280, 180));
 
@@ -33,7 +54,7 @@ public:
         static int frameCounter = 0;
         static int avgFps = 0;
         static float avgFrameTime = 0.0;
-        deltaTimeSum += CoreEngine::getDeltaTime();
+        deltaTimeSum += Core::getDeltaTime();
         frameCounter++;
         if (deltaTimeSum > 0.25) { // update 4 times per second
             avgFrameTime = float(deltaTimeSum / frameCounter);
@@ -49,9 +70,7 @@ public:
 
         ImGui::Begin("Main", nullptr, flags);
         {
-
-
-            ImGui::BeginTable("mainInterfaceSplit", 2);
+            ImGui::BeginTable("mainInterfaceSplit", 3);
             {
                 ImGui::TableNextColumn();
                 {
@@ -59,13 +78,20 @@ public:
                     ImGui::Text("FPS: %d", avgFps);
                     ImGui::Text("Frame time: %f ms", avgFrameTime * 1000);
                     ImGui::Text("%s", std::string(
-                            "Camera position: " + glm::to_string(CoreEngine::getCamera().getPosition())).c_str());
-                    ImGui::Text("OpenGL errors: %s", oglErr.c_str());
+                            "Camera position: " + glm::to_string(Core::getCamera().getPosition())).c_str());
+                    ImGui::Text("OpenGL errors:");
+                    ImGui::SameLine();
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
+                    ImGui::Text("%s", oglErr.c_str());
+                    ImGui::PopStyleColor();
 
                     static bool showDemoWindow = false;
                     ImGui::Checkbox("DemoWindow", &showDemoWindow);
-                    if(showDemoWindow){
+                    if (showDemoWindow) {
                         ImGui::ShowDemoWindow();
+                    }
+                    if (ImGui::Button("Reload shaders")) {
+                        (*displayMode)->reloadShaders();
                     }
                 }
 
@@ -76,11 +102,21 @@ public:
                             (*displayMode) = v;
                         }
                     }
-                    if (ImGui::Button("Reload shaders")) {
-                        (*displayMode)->loadShaders();
-                    }
-                    if (ImGui::Button("Pause"))
-                        pause = !pause;
+                }
+                ImGui::TableNextColumn();
+                {
+                    ImGui::SliderInt("lights number", &globalSettings.numberOfLights, 0, 20);
+                    ImGui::SliderInt("recursion depth", &globalSettings.recursionDepth, 0, 20);
+                    ImGui::SliderFloat("gamma:", &globalSettings.gamma, 0.0, 5.0);
+                    ImGui::SliderFloat("exposure:", &globalSettings.exposure, 0.0, 10.0);
+
+                    bool skyBox = globalSettings.useSkyBox;
+                    ImGui::Checkbox("skyBox", &skyBox);
+                    globalSettings.useSkyBox = skyBox;
+
+                    bool floor = globalSettings.useFloor;
+                    ImGui::Checkbox("floor", &floor);
+                    globalSettings.useFloor = floor;
                 }
             }
             ImGui::EndTable();

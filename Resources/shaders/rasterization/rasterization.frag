@@ -1,17 +1,16 @@
 #version 330 core
-out vec4 FragColor;
 
-flat in vec3 Normal;
-in vec3 FragPos;
+out vec4 fragColor;
+flat in vec3 normal;
 
 void main()
 {
     vec3 color = vec3(0.7);    // always grey
 
+    // simple lighting
     vec3 directionalLight = vec3(-0.2, -1.0, -0.3);
     float lightIntensity = 0.8;
+    color += clamp(dot(normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
 
-    color += clamp(dot(Normal, directionalLight) * -1, 0.0, 1.0) * lightIntensity;
-
-    FragColor = vec4(color, 1.0);
+    fragColor = vec4(color, 1.0);
 }

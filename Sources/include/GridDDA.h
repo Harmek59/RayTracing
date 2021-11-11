@@ -5,12 +5,13 @@
 #include <iterator>
 #include <cmath>
 #include "TriangleMesh.h"
-#include "tribox3.h"
 
 #include <iostream>
 #include <cstring>
 
 #include <glm/gtx/string_cast.hpp>
+
+#include "tribox3.h"
 
 std::pair<glm::vec3, glm::vec3> triangleBoundingBox(const TriangleMesh::Triangle &t);
 
@@ -34,7 +35,17 @@ public:
 
     GridDDA() = default;
 
-    GridDDA(const TriangleMesh &mesh);
+    GridDDA(GridData gridData) {
+        gridData.cellsBeginIndex += uint32_t(cellsArray.size());
+        gridData.cellsEndIndex += uint32_t(cellsArray.size());
+        gridDataArray.push_back(gridData);
+        gridDataIndex = int(gridDataArray.size() - 1);
+    }
+
+    GridDDA(GridData gridData, std::vector<Cell> cellsArr) : GridDDA(gridData) {
+        std::move(cellsArr.begin(), cellsArr.end(), std::back_inserter(cellsArray));
+    }
+
 
     static void
     bindBuffers(uint32_t trianglesIndiciesBufferBinding, uint32_t cellsBufferBinding, uint32_t gridDataBinding) {
@@ -48,15 +59,16 @@ public:
     }
 
     int getNumberOfCells() const {
-        return int(std::distance(beginOfCellsArray, endOfCellsArray));
+        return gridDataArray[gridDataIndex].cellsEndIndex - gridDataArray[gridDataIndex].cellsBeginIndex;
     }
 
     GridData getGridData() const {
-        return gridData;
+        return gridDataArray[gridDataIndex];
     }
 
 //private:
     glm::ivec3 to3D(uint32_t idx) {
+        const auto &gridResolution = gridDataArray[gridDataIndex].gridResolution;
         int z = idx / (gridResolution.x * gridResolution.y);
         idx -= (z * gridResolution.x * gridResolution.y);
         int y = idx / gridResolution.x;
@@ -65,6 +77,7 @@ public:
     }
 
     uint32_t from3D(glm::ivec3 cords) {
+        const auto &gridResolution = gridDataArray[gridDataIndex].gridResolution;
         return (cords.z * gridResolution.x * gridResolution.y) + (cords.y * gridResolution.x) + cords.x;
     }
 
@@ -94,14 +107,6 @@ public:
 
         buff.bindBufferBase(GL_SHADER_STORAGE_BUFFER, bindingBlock);
     }
-
-    std::vector<Cell>::iterator beginOfCellsArray;
-    std::vector<Cell>::iterator endOfCellsArray;
-
-    glm::ivec3 gridResolution;
-    glm::vec3 cellSize;
-
-    GridData gridData;
 
     int gridDataIndex;
 };

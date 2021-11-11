@@ -2,6 +2,7 @@
 
 #include "GridDDA.h"
 #include "TriangleMesh.h"
+#include "DDAGridsCreator.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -13,45 +14,35 @@ class Model {
 public:
     Model(const std::string &path, glm::vec3 position, glm::vec3 scale = glm::vec3(1.0f), uint32_t materialID = 0) {
         gridsBeginIndex = uint32_t(GridDDA::gridDataArray.size());
-        GridDDA grid;
-        std::tie(triangleMesh, grid) = loadObjMesh(path, position, scale, materialID);
+        auto[triangleMesh_, gridDataArr, cellsArr] = loadObjMesh(path, position, scale, materialID);
 
-        //take only first half
-        int newZSize = grid.gridData.gridResolution.z / 2;
-//        grid.gridData.gridResolution.z = newZSize;
+        triangleMesh = std::move(triangleMesh_);
 
         std::vector<GridDDA> grids;
-        grids.push_back(grid);
+        std::move(gridDataArr.begin(), gridDataArr.end(), std::back_inserter(grids));
+
+        //MUST BE AFTER CONTRUCTION OF GRID DDA
+        std::move(cellsArr.begin(), cellsArr.end(), std::back_inserter(GridDDA::cellsArray));
+
+
         this->position = position;
         this->scale = scale;
-        auto trianglesBegin = std::distance(triangleMesh.triangles.begin(), triangleMesh.beginOfMeshTriangles);
-        auto trianglesEnd = std::distance(triangleMesh.triangles.begin(), triangleMesh.endOfMeshTriangles);
+        auto trianglesBegin = triangleMesh.beginOfMeshTriangles;
+        auto trianglesEnd = triangleMesh.endOfMeshTriangles;
         modelDataArray.push_back(
-                ModelData{getPositionMatrix(), getRotationMatrix(), getScaleMatrix(), glm::vec4(1.0), glm::ivec4(1),
-                          uint32_t(trianglesEnd - trianglesBegin), glm::vec3(1.0), glm::vec4(1.0)});
+                ModelData{getPositionMatrix(), getRotationMatrix(), getScaleMatrix(), glm::vec4(1.0),
+                          glm::ivec4(1), glm::ivec4(1), glm::vec3(1.0),
+                          uint32_t(trianglesEnd - trianglesBegin)});
         modelDataIndex = uint32_t(modelDataArray.size() - 1);
         modelDataArray[modelDataIndex].beginEndTriangles = glm::ivec4(trianglesBegin, trianglesEnd, 0, 0);
 
         for (auto grid: grids) {
             //grid data jest dodawane do gridDataArray w konstruktorze GridDDA
             GridDDA::gridDataArray[grid.gridDataIndex].modelDataId = modelDataIndex;
-
-//            auto gd = GridDDA::gridDataArray[grid.gridDataIndex];// second one
-//
-//            GridDDA::gridDataArray[grid.gridDataIndex].gridResolution.z = newZSize;
-//
-//            GridDDA::gridDataArray[grid.gridDataIndex].gridEnd.z = GridDDA::gridDataArray[grid.gridDataIndex].gridBegin.z + grid.gridData.cellSize.z * newZSize;
-//            GridDDA::gridDataArray[grid.gridDataIndex].cellsEndIndex =
-//                    GridDDA::gridDataArray[grid.gridDataIndex].cellsBeginIndex +
-//                    newZSize * grid.gridData.gridResolution.y * grid.gridData.gridResolution.x;
-//
-//
-//            gd.gridResolution.z = gd.gridResolution.z - newZSize -1;
-//            gd.gridBegin.z += grid.gridData.cellSize.z * gd.gridResolution.z;
-//            gd.cellsBeginIndex += gd.gridResolution.z * grid.gridData.gridResolution.y * grid.gridData.gridResolution.x;
-//            GridDDA::gridDataArray.push_back(gd);
         }
         gridsEndIndex = uint32_t(GridDDA::gridDataArray.size());
+
+        modelDataArray[modelDataIndex].beginEndGrids = glm::ivec4(gridsBeginIndex, gridsEndIndex, 0, 0);
     }
 
     Model(const Model &model, glm::vec3 position, glm::vec3 scale) {
@@ -80,7 +71,7 @@ public:
         gridsEndIndex = uint32_t(GridDDA::gridDataArray.size());
     }
 
-    std::pair<TriangleMesh, GridDDA>
+    std::tuple<TriangleMesh, std::vector<GridDDA::GridData>, std::vector<GridDDA::Cell>>
     loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multiplier, uint32_t materialID);
 
     glm::mat4 getModelMatrix() const;
@@ -111,11 +102,22 @@ public:
         modelDataArrayBuffer.unBind();
     }
 
+    int getNumberOfGrids() const {
+        return gridsEndIndex - gridsBeginIndex;
+    }
+
+    std::pair<uint32_t, uint32_t> getGridsBeginEndIndexes() const {
+        return {gridsBeginIndex, gridsEndIndex};
+    }
+
+    int getNumberOfTriangles() const {
+        return modelDataArray[modelDataIndex].numberOfTriangles;
+    }
+
 //private:
     uint32_t gridsBeginIndex;
     uint32_t gridsEndIndex;
 
-//    GridDDA grid;
     TriangleMesh triangleMesh;
 
 
@@ -127,9 +129,10 @@ public:
 
         glm::vec4 whetherToDraw;
         glm::ivec4 beginEndTriangles;
+        glm::ivec4 beginEndGrids;
+        glm::vec3 offset2;
         uint32_t numberOfTriangles;
-        glm::vec3 offset;
-        glm::vec4 offset2;
+
     };
 
     static inline std::vector<ModelData> modelDataArray;

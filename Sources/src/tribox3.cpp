@@ -1,5 +1,13 @@
 #include "tribox3.h"
 
+
+#define X 0
+
+#define Y 1
+
+#define Z 2
+
+
 int planeBoxOverlap(float normal[3], float vert[3], float maxbox[3])	// -NJMP-
 
 {

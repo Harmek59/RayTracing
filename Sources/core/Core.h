@@ -1,16 +1,16 @@
 #pragma once
 #include <string>
 #include <memory>
-#include <iostream>
 
 #include "OpenGLHandler.h"
 #include "Camera.h"
-#include "FrameCounter.h"
 
 
-class CoreEngine{
+class Core{
 public:
-    static void createCoreEngine();
+    Core() = delete;
+
+    static void setUp();
 
     static bool checkIfMainLoopShouldBreak();
 
@@ -32,32 +32,27 @@ public:
 
     static void postFrameLogic();
 
-    static void printFrameLogs();
-
     static float getDeltaTime();
+
+    static void enableVsync();
+    static void disableVsync();
 
     static uint32_t getWindowHeight();
     static uint32_t getWindowWidth();
 
-    static bool isMouseCaptured() {
-        return mouseCaptured;
-    }
-
+    static bool isMouseCaptured();
 private:
-    CoreEngine() = delete;
-
     inline static short oglVersionMajor = 4;
     inline static short oglVersionMinor = 3;
     inline static uint32_t windowWidth = 1600;
     inline static uint32_t windowHeight = 900;
-    inline static std::string title = "Ray tracing";
-
-    inline static float deltaTime = 0.0;
+    inline static std::string title = "Ray tracing demo";
 
     inline static std::unique_ptr<OpenGLHandler> oglHandler;
     inline static Camera camera = Camera(windowWidth, windowHeight, 45.f, 0.1f, 4096.f);
 
-    inline static FrameCounter frameCounter;
+    inline static float deltaTime = 0.0;
+    inline static float prevFrameTime = 0.0f;
 
     inline static bool mouseCaptured = true;
 };

@@ -43,24 +43,8 @@ GLuint FrameBuffer::getFrameBufferID() {
     return frameBufferID;
 }
 
-void FrameBuffer::attachTextureToBuffer(Texture2D &texture, GLenum textureAttachment, std::vector<GLenum> drawBuffers) {
-    bind();
-    texture.bind();
-
-    glFramebufferTexture(GL_FRAMEBUFFER, textureAttachment, texture.getTextureID(), 0);
-
-    glDrawBuffers(GLsizei(drawBuffers.size()), drawBuffers.data());
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        throw std::runtime_error("Framebuffer not complete!");
-    }
-
-    texture.unBind();
-    unBind();
-}
-
 void
-FrameBuffer::attachTextureToBuffer(TextureCubeMap &texture, GLenum textureAttachment, std::vector<GLenum> drawBuffers) {
+FrameBuffer::attachTextureToBuffer(TextureInterface &texture, GLenum textureAttachment, std::vector<GLenum> drawBuffers) {
     bind();
     texture.bind();
 

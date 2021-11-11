@@ -1,30 +1,16 @@
 #pragma once
 
-#include <glad/glad.h>
+#include "TextureInterface.h"
 #include <glm/glm.hpp>
 
 #include <string>
 
-//TODO: make Texture interface
-class Texture2D {
+class Texture2D : public TextureInterface {
 public:
     Texture2D(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
               unsigned char *data = nullptr);
 
     Texture2D(const std::string &fileName);
-
-    ~Texture2D();
-
-    Texture2D(Texture2D &&);
-
-    Texture2D &operator=(Texture2D &&);
-
-    //delete copy
-    Texture2D(const Texture2D &) = delete;
-
-    Texture2D &operator=(const Texture2D &) = delete;
-
-    void setTextureParameters();
 
     void setTextureData(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                         unsigned char *data = nullptr);
@@ -33,16 +19,10 @@ public:
 
     void loadDataFromFile(const std::string &fileName);    //it sets texture data as well
 
-    void bind();
+    virtual void bind() override;
 
-    void unBind();
-
-    GLuint getTextureID();
+    virtual void unBind() override;
 
 private:
-    void create();
-
-    void remove();
-
-    GLuint textureID = 0;
+    virtual void setTextureParameters() override;
 };

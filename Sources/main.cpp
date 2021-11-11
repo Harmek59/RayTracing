@@ -1,4 +1,6 @@
-﻿#include "imgui.h"
+﻿//TODO: zmien aby chowanie modelu (hide) działało w taki sposób, aby nie wysyłać tych danych na GPU, a nie tak jak jest teraz wysylam wszystko i w shaderach sprawdzam czy jest hide czy nie
+
+#include "imgui.h"
 
 
 #include <glad/glad.h>
@@ -9,13 +11,15 @@
 #include "BVHTree.h"
 
 #include "Texture2D.h"
-#include "CoreEngine.h"
+#include "Core.h"
 #include "DisplayModeNormal.h"
-#include "DisplayModeRasterizationWithGrids.h"
+#include "DisplayModes/DisplayModeGrid.h"
 #include "DisplayModeDirectionalShadowMap.h"
+#include "DisplayModes/DisplayModeAABB.h"
 #include "DisplayModePointShadowCubeMap.h"
 #include "DisplayModeTree.h"
 #include "Scene.h"
+#include "Buffer.h"
 #include "Material.h"
 #include "TextureCubeMap.h"
 #include "Gui.h"
@@ -40,8 +44,11 @@ MessageCallback(GLenum source,
 }
 
 int main() {
-    CoreEngine::createCoreEngine();
-    CoreEngine::enableDepthTest();
+    Core::setUp();
+    Core::enableDepthTest();
+//    Core::disableVsync();
+    Core::enableVsync();
+
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse; // capturing mouse, i need to disable mouse in imgui as well
 
     glEnable(GL_DEBUG_OUTPUT);
@@ -58,8 +65,8 @@ int main() {
     glActiveTexture(GL_TEXTURE3);
     cubeMap.bind();
 
-    CoreEngine::getCamera().setMovementSpeed(40.);
-    CoreEngine::getCamera().setRotation(glm::radians(180.f), 0.f, 0.f);
+    Core::getCamera().setMovementSpeed(40.);
+    Core::getCamera().setRotation(glm::radians(180.f), 0.f, 0.f);
 
     Material materials;
     materials.loadFromFile("../Resources/Materials.txt");
@@ -70,23 +77,25 @@ int main() {
     scenes.emplace("2_Ball", Scene("../Resources/Scenes/Scene2.txt"));
     scenes.emplace("2_Cats", Scene("../Resources/Scenes/Scene3.txt"));
     scenes.emplace("4_Tree", Scene("../Resources/Scenes/Scene4.txt"));
+    scenes.emplace("4_Mirrors", Scene("../Resources/Scenes/Mirror.txt"));
 //    scenes.emplace("5_5kk", Scene("../Resources/Scenes/Scene5.txt"));
 
 
     Scene *currScene = &scenes.at("1_BasicScene");
 
     DisplayModeNormal displayModeNormal;
-    DisplayModeRasterizationWithGrids displayModeRasterizationWithGrids;
+    DisplayModeGrid displayModeRasterizationWithGrids;
     DisplayModeDirectionalShadowMap displayModeDirectionalShadowMap;
     DisplayModePointShadowCubeMap displayModePointShadowCubeMap;
     DisplayModeTree displayModeTree;
+    DisplayModeAABB displayModeAabb;
 
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
 
 
-//    glDisable(GL_DEBUG_OUTPUT);
+    glDisable(GL_DEBUG_OUTPUT);
 
     std::string GPUName = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 
@@ -96,27 +105,72 @@ int main() {
     displayModes["directionalShadowMap"] = &displayModeDirectionalShadowMap;
     displayModes["pointShadowCubeMap"] = &displayModePointShadowCubeMap;
     displayModes["Tree"] = &displayModeTree;
+    displayModes["AABB"] = &displayModeAabb;
 
+//    DisplayModeInterface *displayMode = &displayModeAabb;
     DisplayModeInterface *displayMode = &displayModeNormal;
 
+    GlobalSettings globalSettings;
+    globalSettings.recursionDepth = 3;
+    globalSettings.numberOfLights = 0;
 
-    bool pause = false;
+    glm::vec3 lightPos = Core::getCamera().getPosition();
+    lightPos.y = 300.f;
+    lightPos = glm::vec3(0.0, 300., 0.0);
+    glm::mat4 lightProjection, lightView;
+    glm::mat4 lightSpaceMatrix;
+    float near_plane = 1.0f, far_plane = 500.f;
+    lightProjection = glm::ortho(-300.0f, 300.0f, -300.0f, 300.0f, near_plane, far_plane);
+    lightView = glm::lookAt(lightPos, glm::vec3(lightPos.x - 100, -1., lightPos.z - 300), glm::vec3(0.0, 1.0, 0.0));
+    lightSpaceMatrix = lightProjection * lightView;
+
+    globalSettings.lightSpaceMatrix = lightSpaceMatrix; //for now fixed TODO make it dynamic
+
+
+    globalSettings.inverseViewMatrix = glm::inverse(
+            Core::getCamera().getViewMatrix());  //we need to invert view matrix, because everything inside view matrix is inverted (position -> -positon itp.)
+    globalSettings.viewMatrix = Core::getCamera().getViewMatrix();
+    globalSettings.cameraPosition = Core::getCamera().getPosition();
+
+    Buffer globSettBuffer(sizeof(GlobalSettings), GL_DYNAMIC_DRAW);
+
+    auto updateGlobSettBuffer = [&globalSettings, &globSettBuffer]() {
+        globSettBuffer.bind(GL_UNIFORM_BUFFER);
+        GlobalSettings *block = (GlobalSettings *) globSettBuffer.mapBuffer(GL_UNIFORM_BUFFER, GL_READ_WRITE |
+                                                                                               GL_MAP_INVALIDATE_BUFFER_BIT);
+        if (!block) {
+            throw std::runtime_error("Scene::bindSceneDataBufferBase");
+        }
+
+        *block = globalSettings;
+
+        globSettBuffer.unMap(GL_UNIFORM_BUFFER);
+        globSettBuffer.unBind();
+    };
+
+    updateGlobSettBuffer();
+    globSettBuffer.bindBufferBase(GL_UNIFORM_BUFFER, 6);
 
     bool buildAfterDraw = false;
 
-    while (!CoreEngine::checkIfMainLoopShouldBreak()) {
-        CoreEngine::preFrameLogic();
+    while (!Core::checkIfMainLoopShouldBreak()) {
+        Core::preFrameLogic();
         auto start = std::chrono::high_resolution_clock::now();
 
 
-        Camera &camera = CoreEngine::getCamera();
+        Camera &camera = Core::getCamera();
 
-        gui.drawMainInterface(displayModes, &displayMode, pause);
+        globalSettings.inverseViewMatrix = glm::inverse(
+                Core::getCamera().getViewMatrix()); //inverse: see above
+        globalSettings.viewMatrix = Core::getCamera().getViewMatrix();
+        globalSettings.cameraPosition = Core::getCamera().getPosition();
+
+        updateGlobSettBuffer();
+
+        gui.drawMainInterface(displayModes, &displayMode, globalSettings);
 
 
-        auto deltaTime = CoreEngine::getDeltaTime();
-        if (pause)
-            deltaTime = 0.0;
+        auto deltaTime = Core::getDeltaTime();
 
 
         ImGui::SetNextWindowPos(ImVec2(1280, 0));
@@ -186,7 +240,7 @@ int main() {
 
 
         ImGui::End();
-        CoreEngine::postFrameLogic();
+        Core::postFrameLogic();
     }
     return 0;
 }

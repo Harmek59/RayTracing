@@ -46,7 +46,7 @@ public:
     }
 
     auto getNumberOfTriangles() const {
-        return std::distance(beginOfMeshTriangles, endOfMeshTriangles);
+        return endOfMeshTriangles - beginOfMeshTriangles;
     }
 
     void normalize();
@@ -79,14 +79,12 @@ public:
     inline static Buffer normalsBuffer;
     inline static Buffer textureCoordsBuffer;
 
-    std::vector<Triangle>::iterator beginOfMeshTriangles;
-    std::vector<Triangle>::iterator endOfMeshTriangles;
+    uint32_t beginOfMeshTriangles;
+    uint32_t endOfMeshTriangles;
 
-    std::vector<Vertex>::iterator beginOfMeshVertices;
-    std::vector<Vertex>::iterator endOfMeshVertices;
+    uint32_t beginOfMeshVertices;
+    uint32_t endOfMeshVertices;
 
     mutable glm::vec3 bbBegin, bbEnd;
-
-
 };
 

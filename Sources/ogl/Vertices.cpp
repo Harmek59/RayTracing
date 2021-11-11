@@ -1,5 +1,4 @@
 #include "Vertices.h"
-#include <iostream>
 #include <numeric>
 #include <utility>
 

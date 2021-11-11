@@ -10,7 +10,6 @@
 
 class Vertices{
 public:
-
     Vertices() = default;
 
     Vertices(float* vertices, size_t verticesSize, const std::initializer_list<unsigned>& attribSizes, 
@@ -34,7 +33,6 @@ public:
     void bind();
 
     void unBind();
-    
 
 private:
     GLuint VAO = 0, VBO = 0, EBO = 0;

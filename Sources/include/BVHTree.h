@@ -15,13 +15,6 @@ struct AABB {
     uint32_t isValid;
 };
 
-#include <glm/gtx/string_cast.hpp>
-
-std::ostream &operator<<(std::ostream &out, const glm::vec3 &vec) {
-    out << glm::to_string(vec);
-    return out;
-}
-
 
 class BVHTree {
 public:
@@ -52,7 +45,6 @@ public:
     }
 
     void createFromModels(const std::vector<Model> &modelsArray) {
-        ImGui::Checkbox("SAH split", &sahSplit);
 
         // Get starting timepoint
         auto start = std::chrono::high_resolution_clock::now();
@@ -103,7 +95,7 @@ public:
         AABB rootBB = calculateMaxBB(modelsBB);
 
         treeOfModelIndexes[0] = rootBB;
-        if(modelsArray.size() == 1){
+        if(modelsBB.size() == 1){
             treeOfModelIndexes[0].modelIndex = 0;
         }else{
             recursiveBuild(rootBB, 0, modelsBB, modelsArray);
@@ -112,7 +104,7 @@ public:
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-        ImGui::Text("BVH tree creation time: %f ms", duration.count() / 1000.);
+//        ImGui::Text("BVH tree creation time: %f ms", duration.count() / 1000.);
     }
 
     void recursiveBuild(AABB parent, uint32_t parentIndx, std::vector<AABB> modelsBBs,
@@ -139,82 +131,10 @@ public:
 
 
         int splitPoint = int(modelsBBs.size() / 2);
-        // calculate split Point: ( SAH )
-        if (sahSplit) {
-            using Split = std::pair<float, std::pair<AABB, AABB>>;
-            std::vector<Split> splits;
-
-            auto mergeAABB = [](const AABB &bb1, const AABB &bb2) {
-                AABB resultBB;
-                resultBB.end.x = std::max(bb1.end.x, bb2.end.x);
-                resultBB.end.y = std::max(bb1.end.y, bb2.end.y);
-                resultBB.end.z = std::max(bb1.end.z, bb2.end.z);
-
-                resultBB.begin.x = std::min(bb1.begin.x, bb2.begin.x);
-                resultBB.begin.y = std::min(bb1.begin.y, bb2.begin.y);
-                resultBB.begin.z = std::min(bb1.begin.z, bb2.begin.z);
-
-                return resultBB;
-            };
-//            std::cout << "==========\n";
-//            std::cout << parent.begin << " | " << parent.end << "\n";
-
-            // Compute costs for splitting after each bucket
-            for (int splitAfter = 0; splitAfter < modelsBBs.size() - 1; splitAfter++) {
-                //dont want to check (for now) what if we split after all models(left split all models, right split zero)
-                AABB left = modelsBBs[0];
-
-                for (int i = 1; i <= splitAfter; i++) {
-                    left = mergeAABB(left, modelsBBs[i]);
-                }
-//                float leftNumberOfCells =
-//                        std::pow((left.end.x - left.begin.x), 2) + std::pow((left.end.y - left.begin.y), 2) +
-//                        std::pow((left.end.z - left.begin.z), 2);
-                float leftNumberOfCells =
-                        (left.end.x - left.begin.x) * (left.end.y - left.begin.y) * (left.end.z - left.begin.z);
-
-
-                AABB right = modelsBBs[splitAfter + 1];
-
-                for (int i = splitAfter + 2; i < modelsBBs.size(); i++) {
-                    right = mergeAABB(right, modelsBBs[i]);
-
-                }
-//                float rightNumberOfCells =
-//                        std::pow((right.end.x - right.begin.x), 2) + std::pow((right.end.y - right.begin.y), 2) +
-//                        std::pow((right.end.z - right.begin.z), 2);
-                float rightNumberOfCells =
-                        (right.end.x - right.begin.x) * (right.end.y - right.begin.y) * (right.end.z - right.begin.z);
-//                std::cout << "modelsBBs.size(): " << modelsBBs.size() << " dziele po " << splitAfter << ": "
-//                          << leftNumberOfCells + rightNumberOfCells << " left: " << leftNumberOfCells << " | right: "
-//                          << rightNumberOfCells << "\n\tleftAABB:" << left.begin << " | "
-//                          << left.end << " \n\trightAABB: " << right.begin << " | " << right.end << std::endl;
-
-                splits.push_back(Split{leftNumberOfCells + rightNumberOfCells, {left, right}});
-            }
-
-            int bestSplit = 0;
-            for (int i = 1; i < modelsBBs.size() - 1; i++) {
-                if (splits[bestSplit].first >= splits[i].first) {
-                    if (splits[bestSplit].first == splits[i].first) {
-                        // if i is closer to model center
-                        if (std::abs(int(i - modelsBBs.size() / 2)) < std::abs(int(bestSplit - modelsBBs.size() / 2))) {
-                            bestSplit = i;
-                        }
-                    } else {
-                        bestSplit = i;
-                    }
-                }
-            }
-            splitPoint = bestSplit + 1;
-        }
-
-        //
 
         std::vector<AABB> split1 = {modelsBBs.begin(), std::next(modelsBBs.begin(), splitPoint)};
         if (split1.size() == 1) {
             insertLeft(split1.front(), parentIndx);
-
         } else {
             AABB split1BB = calculateMaxBB(split1);
             recursiveBuild(split1BB, insertLeft(split1BB, parentIndx), std::move(split1), modelsArray);
@@ -224,7 +144,6 @@ public:
         std::vector<AABB> split2 = {std::next(modelsBBs.begin(), splitPoint), modelsBBs.end()};
         if (split2.size() == 1) {
             insertRight(split2.front(), parentIndx);
-
         } else {
             AABB split2BB = calculateMaxBB(split2);
             recursiveBuild(split2BB, insertRight(split2BB, parentIndx), std::move(split2), modelsArray);
@@ -238,7 +157,6 @@ public:
         numberOfNodes = int(std::pow(2, treeHeight + 1) - 1);
         treeOfModelIndexes = std::vector<AABB>(numberOfNodes,
                                                AABB{glm::vec3{0.0f, 0.0f, 0.0f}, -1, glm::vec3{0.0f, 0.0f, 0.0f}, 0});
-        std::cout << numberOfNodes << std::endl;
     }
 
 

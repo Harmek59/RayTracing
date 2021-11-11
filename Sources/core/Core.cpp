@@ -1,13 +1,13 @@
-#include "CoreEngine.h"
+#include "Core.h"
 #include "GLFWCallbacks.h"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-void CoreEngine::createCoreEngine(){
+void Core::setUp() {
     oglHandler = std::unique_ptr<OpenGLHandler>(
-        new OpenGLHandler(oglVersionMajor, oglVersionMinor, windowWidth, windowHeight, title));
+            new OpenGLHandler(oglVersionMajor, oglVersionMinor, windowWidth, windowHeight, title));
 
     glfwSetFramebufferSizeCallback(oglHandler->getWindow(), GLFWCallbacks::framebuffer_size_callback);
     glfwSetCursorPosCallback(oglHandler->getWindow(), GLFWCallbacks::mouse_callback);
@@ -20,42 +20,41 @@ void CoreEngine::createCoreEngine(){
     ImGuiIO &io = ImGui::GetIO();
     (void) io;
     ImGui::StyleColorsDark();
-    ImGui_ImplGlfw_InitForOpenGL(CoreEngine::getWindow(), true);
+    ImGui_ImplGlfw_InitForOpenGL(Core::getWindow(), true);
     ImGui_ImplOpenGL3_Init("#version 430");
 }
 
-bool CoreEngine::checkIfMainLoopShouldBreak(){
+bool Core::checkIfMainLoopShouldBreak() {
     return glfwWindowShouldClose(getWindow());
 }
 
-void CoreEngine::swapBuffers(){
-   glfwSwapBuffers(getWindow());
+void Core::swapBuffers() {
+    glfwSwapBuffers(getWindow());
 }
 
-void CoreEngine::pollEvents(){
-   glfwPollEvents();
+void Core::pollEvents() {
+    glfwPollEvents();
 }
 
-GLFWwindow* CoreEngine::getWindow(){
+GLFWwindow *Core::getWindow() {
     return oglHandler->getWindow();
 }
 
-Camera& CoreEngine::getCamera(){
+Camera &Core::getCamera() {
     return camera;
 }
 
-void CoreEngine::enableFaceCulling(){
+void Core::enableFaceCulling() {
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
-    glFrontFace(GL_CCW); 
+    glFrontFace(GL_CCW);
 }
 
-void CoreEngine::enableDepthTest(){
+void Core::enableDepthTest() {
     glEnable(GL_DEPTH_TEST);
 }
 
-void CoreEngine::processInput()
-{
+void Core::processInput() {
     GLFWwindow *window = getWindow();
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -81,8 +80,7 @@ void CoreEngine::processInput()
             glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             mouseCaptured = false;
             camera.setFirstMouseMove(true);
-        }
-        else {
+        } else {
             ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
             glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             mouseCaptured = true;
@@ -92,35 +90,49 @@ void CoreEngine::processInput()
     }
 }
 
-void CoreEngine::preFrameLogic(){
-    deltaTime = frameCounter.update(static_cast<float>(glfwGetTime()));
+void Core::preFrameLogic() {
+    float currFrameTime = static_cast<float>(glfwGetTime());
+    deltaTime = currFrameTime - prevFrameTime;
+    prevFrameTime = currFrameTime;
 
-    processInput();    
+    processInput();
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
 
-void CoreEngine::postFrameLogic(){
+void Core::postFrameLogic() {
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    CoreEngine::swapBuffers();
-    CoreEngine::pollEvents();
+    Core::swapBuffers();
+    Core::pollEvents();
 }
 
-float CoreEngine::getDeltaTime(){
+float Core::getDeltaTime() {
     return deltaTime;
 }
 
-uint32_t CoreEngine::getWindowHeight(){
+uint32_t Core::getWindowHeight() {
     return windowHeight;
 }
-uint32_t CoreEngine::getWindowWidth(){
+
+uint32_t Core::getWindowWidth() {
     return windowWidth;
+}
+
+bool Core::isMouseCaptured() {
+    return mouseCaptured;
+}
+
+void Core::enableVsync() {
+    glfwSwapInterval(1);
+}
+
+void Core::disableVsync() {
+    glfwSwapInterval(0);
 }

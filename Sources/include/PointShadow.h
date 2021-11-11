@@ -22,7 +22,7 @@ public:
                                                              pointLightDepthShaderPath_geom);
     }
 
-    void generateShadow(int numberOfTriangles) {
+    void generateShadow(const std::vector<Model>& models) {
         glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float) SHADOW_WIDTH / (float) SHADOW_HEIGHT, near_plane,
                                                 far_plane);
         std::vector<glm::mat4> shadowTransforms;
@@ -51,7 +51,15 @@ public:
         }
         pointLightDepthShader->setFloat("far_plane", far_plane);
         pointLightDepthShader->setVec3("lightPos", lightPos);
-        glDrawArrays(GL_TRIANGLES, 0, numberOfTriangles * 3);
+
+        pointLightDepthShader->setMat4("customViewMatrixProjection", glm::mat4(1.f));
+        pointLightDepthShader->setBool("useCustomViewProjectionMatrix", true);
+
+        for(const auto& model: models){
+            pointLightDepthShader->setInt("modelDataIndex", model.modelDataIndex);
+            glDrawArrays(GL_TRIANGLES, 0, 3 * model.getNumberOfTriangles());
+        }
+
         shadowFrameBuffer.unBind();
 
         glViewport(0, 0, 1280, 720);
@@ -66,7 +74,7 @@ private:
     float far_plane = 500.0f;
 
 
-    std::string pointLightDepthShaderPath_vert = "../Resources/shaders/simpleDepthShader.vert";
+    std::string pointLightDepthShaderPath_vert = "../Resources/shaders/rasterization/rasterization.vert";
     std::string pointLightDepthShaderPath_frag = "../Resources/shaders/simpleDepthShader.frag";
     std::string pointLightDepthShaderPath_geom = "../Resources/shaders/simpleDepthShader.geom";
     FrameBuffer shadowFrameBuffer;
