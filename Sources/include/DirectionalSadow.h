@@ -40,7 +40,6 @@ public:
         directionalLightDepthShader->setMat4("customViewMatrixProjection", lightSpaceMatrix);
         directionalLightDepthShader->setBool("useCustomViewProjectionMatrix", true);
 
-
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         shadowFrameBuffer.bind();
 
@@ -54,7 +53,6 @@ public:
         // reset viewport
         glViewport(0, 0, 1280, 720);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         glActiveTexture(GL_TEXTURE1);
         shadowMapTexture.bind();
     }

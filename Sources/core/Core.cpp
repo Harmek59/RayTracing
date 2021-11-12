@@ -6,14 +6,12 @@
 #include "imgui_impl_opengl3.h"
 
 void Core::setUp() {
-    oglHandler = std::unique_ptr<OpenGLHandler>(
-            new OpenGLHandler(oglVersionMajor, oglVersionMinor, windowWidth, windowHeight, title));
+    oglHandler = std::make_unique<OpenGLHandler>(oglVersionMajor, oglVersionMinor, windowWidth, windowHeight, title);
 
     glfwSetFramebufferSizeCallback(oglHandler->getWindow(), GLFWCallbacks::framebuffer_size_callback);
     glfwSetCursorPosCallback(oglHandler->getWindow(), GLFWCallbacks::mouse_callback);
 
-    if (mouseCaptured)
-        glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    mouseCaptured = false;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -76,14 +74,9 @@ void Core::processInput() {
     if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE && P_press) {
         P_press = false;
         if (mouseCaptured) {
-            ImGui::GetIO().ConfigFlags ^= ImGuiConfigFlags_NoMouse;
-            glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            mouseCaptured = false;
-            camera.setFirstMouseMove(true);
+            releaseMouse();
         } else {
-            ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
-            glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            mouseCaptured = true;
+            captureMouse();
         }
 
 
@@ -135,4 +128,16 @@ void Core::enableVsync() {
 
 void Core::disableVsync() {
     glfwSwapInterval(0);
+}
+
+void Core::captureMouse(){
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
+    glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    mouseCaptured = true;
+}
+void Core::releaseMouse(){
+    ImGui::GetIO().ConfigFlags ^= ImGuiConfigFlags_NoMouse;
+    glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    mouseCaptured = false;
+    camera.setFirstMouseMove(true);
 }

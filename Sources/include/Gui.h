@@ -15,7 +15,7 @@ struct GlobalSettings {
     float fov = 45.;
 
     int recursionDepth;
-    int numberOfLights;
+    int numberOfLights; //TODO for now it is not used
 
     float gamma = 2.2f;
     float exposure = 1.f;
@@ -67,7 +67,6 @@ public:
         while (auto err = glGetError())
             oglErr += std::to_string(err) + " ";
 
-
         ImGui::Begin("Main", nullptr, flags);
         {
             ImGui::BeginTable("mainInterfaceSplit", 3);
@@ -105,7 +104,6 @@ public:
                 }
                 ImGui::TableNextColumn();
                 {
-                    ImGui::SliderInt("lights number", &globalSettings.numberOfLights, 0, 20);
                     ImGui::SliderInt("recursion depth", &globalSettings.recursionDepth, 0, 20);
                     ImGui::SliderFloat("gamma:", &globalSettings.gamma, 0.0, 5.0);
                     ImGui::SliderFloat("exposure:", &globalSettings.exposure, 0.0, 10.0);
@@ -122,8 +120,67 @@ public:
             ImGui::EndTable();
         }
         ImGui::End();
+    }
 
+    void drawSceneInterface(std::map<std::string, Scene> &scenes,
+                            Scene **currScene) {
+        ImGui::SetNextWindowPos(ImVec2(1280, 0));
+        ImGui::SetNextWindowSize(ImVec2(329, 900));
 
+        ImGui::Begin("Scene", nullptr, flags);
+        {
+            for (auto&[name, scene] : scenes) {
+                if (ImGui::Button(name.c_str())) {
+                    *currScene = &scene;
+                }
+            }
+            ImGui::Separator();
+
+            static int selectedModel = 0;
+            if (ImGui::BeginCombo("##combo", std::to_string(
+                    selectedModel).c_str())) {
+                for (int i = 0; i < int((*currScene)->getModels().size()); ++i) {
+                    bool is_selected = selectedModel == i;
+                    if (ImGui::Selectable(std::to_string(i).c_str(), is_selected)) {
+                        selectedModel = i;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            if (selectedModel > -1 && selectedModel < int((*currScene)->getModels().size())) {
+                auto &model = (*currScene)->getModels()[selectedModel];
+                ImGui::SliderFloat3("Position", &model.position.x, -500.f, 500.f);
+                ImGui::SliderFloat("Position x:", &model.position.x, -500.f, 500.f);
+                ImGui::SliderFloat("Position y:", &model.position.y, -500.f, 500.f);
+                ImGui::SliderFloat("Position z:", &model.position.z, -500.f, 500.f);
+                ImGui::Text("");
+                ImGui::SliderFloat("Scale x:", &model.scale.x, 0.f, 500.f);
+                ImGui::SliderFloat("Scale y:", &model.scale.y, 0.f, 500.f);
+                ImGui::SliderFloat("Scale z:", &model.scale.z, 0.f, 500.f);
+                ImGui::Text("");
+                ImGui::SliderFloat("Rotation x:", &model.rotation.x, -180.f, 180.f);
+                ImGui::SliderFloat("Rotation y:", &model.rotation.y, -180.f, 180.f);
+                ImGui::SliderFloat("Rotation z:", &model.rotation.z, -180.f, 180.f);
+                ImGui::Text("");
+                if (model.draw) {
+                    if (ImGui::Button("Hide")) {
+                        model.draw = false;
+                    }
+                } else {
+                    if (ImGui::Button("Show")) {
+                        model.draw = true;
+                    }
+                }
+
+            }
+
+            ImGui::Separator();
+        }
+        ImGui::End();
     }
 
     void clean() {

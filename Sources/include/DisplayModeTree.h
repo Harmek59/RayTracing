@@ -19,8 +19,11 @@ public:
 
 
     virtual void draw(const Scene &scene) override {
-        ImGui::SliderInt("Tree layer", &treeLayer, -1, 10);
-
+        ImGui::Begin("Scene");
+        {
+            ImGui::SliderInt("Tree layer", &treeLayer, -1, 10);
+            ImGui::Separator();
+        }
         DisplayModeRasterization::draw(scene);
 
         treeShader->use();

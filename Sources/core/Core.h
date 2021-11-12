@@ -37,6 +37,9 @@ public:
     static void enableVsync();
     static void disableVsync();
 
+    static void captureMouse();
+    static void releaseMouse();
+
     static uint32_t getWindowHeight();
     static uint32_t getWindowWidth();
 

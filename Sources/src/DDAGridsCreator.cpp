@@ -63,18 +63,8 @@ DDAGridsCreator::calculateBaseGridAndCells(const TriangleMesh &mesh) {
                     glm::vec3 cellCenter = boundingBox.first + cellHalfSize +
                                            glm::vec3(cellSize.x * x, cellSize.y * y, cellSize.z * z);
 
-                    float boxcenter[3] = {cellCenter.x, cellCenter.y, cellCenter.z};
-                    float boxhalfsize[3] = {cellHalfSize.x + 1e-5f, cellHalfSize.y + 1e-5f, cellHalfSize.z +
-                                                                                            1e-5f};    // + 1e-5f dodaje bo w wooden_crate.obj byly bugi: trojkaty ktore byly rownolegle do sciany AABB i sie z nimi stykaly nie byby dodawane do komorki. po powiekszeniu komorki o 1e-5 w kazda strone problem sie rozwiazal
-                    auto &vert1 = TriangleMesh::getVertices()[(TriangleMesh::triangles[iter]).vertexIndex1];
-                    auto &vert2 = TriangleMesh::getVertices()[(TriangleMesh::triangles[iter]).vertexIndex2];
-                    auto &vert3 = TriangleMesh::getVertices()[(TriangleMesh::triangles[iter]).vertexIndex3];
-                    float triverts[3][3] = {{vert1.x, vert1.y, vert1.z},
-                                            {vert2.x, vert2.y, vert2.z},
-                                            {vert3.x, vert3.y, vert3.z}};
-
-
-                    if (triBoxOverlap(boxcenter, boxhalfsize, triverts)) {
+                    // !!! przy liczeniu triangle-box overlap pamietaj zeby dodac jakis offset aby trojkaty równolegle do boku boxa, które są "na" tej ścianie nie byly odrzucane. W triangleBoxOverlap jest przyklad
+                    if (triangleBoxOverlap(cellCenter, cellHalfSize, TriangleMesh::triangles[iter])) {
                         auto triangleIndex = iter;
                         localIndiciesArr[from3D(glm::ivec3(x, y, z), gridResolution)].push_back(
                                 uint32_t(triangleIndex));

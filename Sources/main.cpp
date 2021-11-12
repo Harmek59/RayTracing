@@ -46,10 +46,9 @@ MessageCallback(GLenum source,
 int main() {
     Core::setUp();
     Core::enableDepthTest();
-//    Core::disableVsync();
-    Core::enableVsync();
-
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse; // capturing mouse, i need to disable mouse in imgui as well
+    Core::disableVsync();
+//    Core::enableVsync();
+    Core::captureMouse();
 
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
@@ -95,19 +94,18 @@ int main() {
     glBindVertexArray(VAO);
 
 
-    glDisable(GL_DEBUG_OUTPUT);
+//    glDisable(GL_DEBUG_OUTPUT);
 
     std::string GPUName = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 
     std::map<std::string, DisplayModeInterface *> displayModes;
-    displayModes["normal"] = &displayModeNormal;
-    displayModes["rasterWithGrid"] = &displayModeRasterizationWithGrids;
-    displayModes["directionalShadowMap"] = &displayModeDirectionalShadowMap;
-    displayModes["pointShadowCubeMap"] = &displayModePointShadowCubeMap;
-    displayModes["Tree"] = &displayModeTree;
-    displayModes["AABB"] = &displayModeAabb;
+    displayModes["1_normal"] = &displayModeNormal;
+    displayModes["3_rasterWithGrid"] = &displayModeRasterizationWithGrids;
+    displayModes["5_directionalShadowMap"] = &displayModeDirectionalShadowMap;
+    displayModes["6_pointShadowCubeMap"] = &displayModePointShadowCubeMap;
+    displayModes["4_Tree"] = &displayModeTree;
+    displayModes["2_AABB"] = &displayModeAabb;
 
-//    DisplayModeInterface *displayMode = &displayModeAabb;
     DisplayModeInterface *displayMode = &displayModeNormal;
 
     GlobalSettings globalSettings;
@@ -151,11 +149,8 @@ int main() {
     updateGlobSettBuffer();
     globSettBuffer.bindBufferBase(GL_UNIFORM_BUFFER, 6);
 
-    bool buildAfterDraw = false;
-
     while (!Core::checkIfMainLoopShouldBreak()) {
         Core::preFrameLogic();
-        auto start = std::chrono::high_resolution_clock::now();
 
 
         Camera &camera = Core::getCamera();
@@ -169,78 +164,22 @@ int main() {
 
         gui.drawMainInterface(displayModes, &displayMode, globalSettings);
 
+        gui.drawSceneInterface(scenes, &currScene);
 
         auto deltaTime = Core::getDeltaTime();
-
-
-        ImGui::SetNextWindowPos(ImVec2(1280, 0));
-        ImGui::SetNextWindowSize(ImVec2(329, 900));
-//        ImGui::Begin("Scene", nullptr, flags);
-        ImGui::Begin("Scene");
-        ImGui::Checkbox("Build after draw", &buildAfterDraw);
-
-        for (auto&[name, scene] : scenes) {
-            if (ImGui::Button(name.c_str())) {
-                currScene = &scene;
-            }
-        }
-        static int selectedModel = 0;
-
-        if (ImGui::BeginCombo("##combo", std::to_string(
-                selectedModel).c_str())) {
-            for (int i = 0; i < int(currScene->getModels().size()); ++i) {
-                bool is_selected = selectedModel == i;
-                if (ImGui::Selectable(std::to_string(i).c_str(), is_selected)) {
-                    selectedModel = i;
-                }
-                if (is_selected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
-        if (selectedModel > -1 && selectedModel < int(currScene->getModels().size())) {
-            auto &model = currScene->getModels()[selectedModel];
-            ImGui::SliderFloat3("Position", &model.position.x, -500.f, 500.f);
-            ImGui::SliderFloat("Position x:", &model.position.x, -500.f, 500.f);
-            ImGui::SliderFloat("Position y:", &model.position.y, -500.f, 500.f);
-            ImGui::SliderFloat("Position z:", &model.position.z, -500.f, 500.f);
-            ImGui::Text("");
-            ImGui::SliderFloat("Scale x:", &model.scale.x, 0.f, 500.f);
-            ImGui::SliderFloat("Scale y:", &model.scale.y, 0.f, 500.f);
-            ImGui::SliderFloat("Scale z:", &model.scale.z, 0.f, 500.f);
-            ImGui::Text("");
-            ImGui::SliderFloat("Rotation x:", &model.rotation.x, -180.f, 180.f);
-            ImGui::SliderFloat("Rotation y:", &model.rotation.y, -180.f, 180.f);
-            ImGui::SliderFloat("Rotation z:", &model.rotation.z, -180.f, 180.f);
-            ImGui::Text("");
-            if (model.draw) {
-                if (ImGui::Button("Hide")) {
-                    model.draw = false;
-                }
-            } else {
-                if (ImGui::Button("Show")) {
-                    model.draw = true;
-                }
-            }
-
-        }
 
         currScene->atFrameBegin(deltaTime);
 
 
-        auto stop = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
         glActiveTexture(GL_TEXTURE3);
         cubeMap.bind();
 
-        ImGui::Text("Trace: %f ms przed Draw", duration.count() / 1000.);
         displayMode->draw(*currScene);
 
 
         ImGui::End();
         Core::postFrameLogic();
     }
+
     return 0;
 }

@@ -1,5 +1,0 @@
-./vcpkg/vcpkg install glfw3
-./vcpkg/vcpkg install imgui[glfw-binding,opengl3-glad-binding]
-./vcpkg/vcpkg install glm
-./vcpkg/vcpkg install stb
-./vcpkg/vcpkg install tinyobjloader
