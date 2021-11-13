@@ -19,7 +19,7 @@ DDAGridsCreator::calculateBaseGridAndCells(const TriangleMesh &mesh) {
 
     glm::vec3 bbSize = boundingBox.second - boundingBox.first;
 
-    float cubeRoot = float(std::pow(float(numberOfTriangles) * 10.0 / (bbSize.x * bbSize.y * bbSize.z),
+    float cubeRoot = float(std::pow(float(numberOfTriangles) * numberOfTrianglesMultiplier / (bbSize.x * bbSize.y * bbSize.z),
                                     1.f / 3.f));    //TODO jakos ogranac liczbe przez ktora mnoze
 
     auto &gridResolution = gridData.gridResolution;
@@ -27,9 +27,9 @@ DDAGridsCreator::calculateBaseGridAndCells(const TriangleMesh &mesh) {
 
     gridResolution = glm::vec3(cubeRoot) * bbSize;
 
-    gridResolution.x = std::clamp(gridResolution.x, 1, 512);
-    gridResolution.y = std::clamp(gridResolution.y, 1, 512);
-    gridResolution.z = std::clamp(gridResolution.z, 1, 512);
+    gridResolution.x = std::clamp(gridResolution.x, 1, maxModelsGridResolution);
+    gridResolution.y = std::clamp(gridResolution.y, 1, maxModelsGridResolution);
+    gridResolution.z = std::clamp(gridResolution.z, 1, maxModelsGridResolution);
 
     cellSize = glm::vec3(bbSize.x / float(gridResolution.x), bbSize.y / float(gridResolution.y),
                          bbSize.z / float(gridResolution.z));
@@ -110,7 +110,7 @@ DDAGridsCreator::baseGridSplitter(GridDDA::GridData baseGrid, std::vector<GridDD
     std::vector<GridDDA::GridData> gridDataArr;
     std::vector<GridDDA::Cell> cellsArr;
 
-    glm::ivec3 numberOfSubGrids = glm::round(glm::vec3(baseGrid.gridResolution) / 32.f);
+    glm::ivec3 numberOfSubGrids = glm::round(glm::vec3(baseGrid.gridResolution) / float(sizeOfSubGrid));
     numberOfSubGrids = glm::clamp(numberOfSubGrids, glm::ivec3(1), glm::ivec3(10000));
 
 //    std::cout << "NumberOfSubGrids: " << glm::to_string(numberOfSubGrids) << std::endl;
@@ -142,7 +142,7 @@ DDAGridsCreator::baseGridSplitter(GridDDA::GridData baseGrid, std::vector<GridDD
                 gData.cellSize = baseGrid.cellSize;
 
                 glm::ivec3 minGridBB = glm::ivec3(99999); // TODO change to max int
-                glm::ivec3 maxGridBB = glm::ivec3(0);
+                glm::ivec3 maxGridBB = glm::ivec3(-1);
 
                 for (int z = gridBegin.z; z < subGridEnd.z; z++) {
                     for (int y = gridBegin.y; y < subGridEnd.y; y++) {

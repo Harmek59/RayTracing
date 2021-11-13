@@ -12,7 +12,7 @@
 
 class Model {
 public:
-    Model(const std::string &path, glm::vec3 position, glm::vec3 scale = glm::vec3(1.0f), uint32_t materialID = 0) {
+    Model(const std::string &path, glm::vec3 position, glm::vec3 scale = glm::vec3(1.0f), glm::vec3 rotation = glm::vec3(0.0f), uint32_t materialID = 0) {
         gridsBeginIndex = uint32_t(GridDDA::gridDataArray.size());
         auto[triangleMesh_, gridDataArr, cellsArr] = loadObjMesh(path, position, scale, materialID);
 
@@ -27,6 +27,7 @@ public:
 
         this->position = position;
         this->scale = scale;
+        this->rotation = rotation;
         auto trianglesBegin = triangleMesh.beginOfMeshTriangles;
         auto trianglesEnd = triangleMesh.endOfMeshTriangles;
         modelDataArray.push_back(
@@ -45,9 +46,10 @@ public:
         modelDataArray[modelDataIndex].beginEndGrids = glm::ivec4(gridsBeginIndex, gridsEndIndex, 0, 0);
     }
 
-    Model(const Model &model, glm::vec3 position, glm::vec3 scale) {
+    Model(const Model &model, glm::vec3 position, glm::vec3 scale, glm::vec3 rotation) {
         this->position = position;
         this->scale = scale;
+        this->rotation = rotation;
 
         ModelData modelData = modelDataArray[model.modelDataIndex];
         modelData.positionMatrix = getPositionMatrix();

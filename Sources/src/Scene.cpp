@@ -24,15 +24,18 @@
             glm::vec3 scale;
             sceneFile >> scale.x >> scale.y >> scale.z;
 
+            glm::vec3 rotation;
+            sceneFile >> rotation.x >> rotation.y >> rotation.z;
+
             int material;
             sceneFile >> material;
 
             if (meshPath[0] == '!' && lastOriginalIdx != -1) {
-                models.emplace_back(models[lastOriginalIdx], position, scale);
+                models.emplace_back(models[lastOriginalIdx], position, scale, rotation);
                 models.back().triangleMesh.bbBegin = models[lastOriginalIdx].triangleMesh.bbBegin;
                 models.back().triangleMesh.bbEnd = models[lastOriginalIdx].triangleMesh.bbEnd;
             } else {
-                models.emplace_back(meshPath, position, scale, material);
+                models.emplace_back(meshPath, position, scale, rotation, material);
 
                 lastOriginalIdx = int(models.size() - 1);
             }

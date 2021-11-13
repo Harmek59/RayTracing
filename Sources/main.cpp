@@ -162,7 +162,7 @@ int main() {
 
         updateGlobSettBuffer();
 
-        gui.drawMainInterface(displayModes, &displayMode, globalSettings);
+        gui.drawMainInterface(displayModes, scenes, &displayMode, globalSettings);
 
         gui.drawSceneInterface(scenes, &currScene);
 

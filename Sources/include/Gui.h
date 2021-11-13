@@ -6,7 +6,6 @@
 #include <map>
 #include <DisplayModes/DisplayModeInterface.h>
 
-
 struct GlobalSettings {
     glm::mat4 viewMatrix;
     glm::mat4 inverseViewMatrix;
@@ -44,7 +43,7 @@ public:
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     }
 
-    void drawMainInterface(const std::map<std::string, DisplayModeInterface *> &displayModes,
+    void drawMainInterface(const std::map<std::string, DisplayModeInterface *> &displayModes, std::map<std::string, Scene> &scenes,
                            DisplayModeInterface **displayMode, GlobalSettings &globalSettings) {
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(1280, 180));
@@ -92,6 +91,23 @@ public:
                     if (ImGui::Button("Reload shaders")) {
                         (*displayMode)->reloadShaders();
                     }
+                    if(ImGui::Button("Reload scenes")){
+                        //TODO reload materials
+                        GridDDA::cellsArray.clear();
+                        GridDDA::trianglesIndiciesArray.clear();
+                        GridDDA::gridDataArray.clear();
+                        Model::modelDataArray.clear();
+
+                        TriangleMesh::triangles.clear();
+                        TriangleMesh::vertices.clear();
+                        TriangleMesh::normals.clear();
+                        TriangleMesh::textureCoords.clear();
+
+                        for(auto &[name, scene] : scenes){
+                            scene.clear();
+                            scene.load();
+                        }
+                    }
                 }
 
                 ImGui::TableNextColumn();
@@ -129,6 +145,11 @@ public:
 
         ImGui::Begin("Scene", nullptr, flags);
         {
+            ImGui::Text("To apply these 3 changes reload scenes \n(button below information)");
+            ImGui::SliderFloat("numberOfTrianglesMultiplier", &DDAGridsCreator::numberOfTrianglesMultiplier, 0.5f, 100.f);
+            ImGui::SliderInt("maxModelsGridResolution", &DDAGridsCreator::maxModelsGridResolution, 64, 8192);
+            ImGui::SliderInt("sizeOfSubGrid", &DDAGridsCreator::sizeOfSubGrid, 4, 128);
+            ImGui::Separator();
             for (auto&[name, scene] : scenes) {
                 if (ImGui::Button(name.c_str())) {
                     *currScene = &scene;
@@ -153,7 +174,6 @@ public:
 
             if (selectedModel > -1 && selectedModel < int((*currScene)->getModels().size())) {
                 auto &model = (*currScene)->getModels()[selectedModel];
-                ImGui::SliderFloat3("Position", &model.position.x, -500.f, 500.f);
                 ImGui::SliderFloat("Position x:", &model.position.x, -500.f, 500.f);
                 ImGui::SliderFloat("Position y:", &model.position.y, -500.f, 500.f);
                 ImGui::SliderFloat("Position z:", &model.position.z, -500.f, 500.f);

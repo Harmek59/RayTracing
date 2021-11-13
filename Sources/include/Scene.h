@@ -15,11 +15,20 @@ class Scene {
 public:
 
     Scene(const std::string &path) {
-        setUp(path);
-        bvhTree = BVHTree(getNumbersOfGrids()); // TODO delete 5
+        this->path = path;
+        load();
     }
 
     void setUp(const std::string &path);
+
+    void load(){
+        setUp(path);
+        bvhTree = BVHTree(getNumbersOfGrids());
+    }
+
+    void clear(){
+        models.clear();
+    }
 
     void atFrameBegin(double deltaTime) {
         updateSceneDataBuffer();
@@ -120,4 +129,6 @@ private:
     PointShadow pointShadow;
 
     BVHTree bvhTree;
+
+    std::string path;
 };
