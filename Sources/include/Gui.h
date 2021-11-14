@@ -146,9 +146,12 @@ public:
         ImGui::Begin("Scene", nullptr, flags);
         {
             ImGui::Text("To apply these 3 changes reload scenes \n(button below information)");
-            ImGui::SliderFloat("numberOfTrianglesMultiplier", &DDAGridsCreator::numberOfTrianglesMultiplier, 0.5f, 100.f);
-            ImGui::SliderInt("maxModelsGridResolution", &DDAGridsCreator::maxModelsGridResolution, 64, 8192);
-            ImGui::SliderInt("sizeOfSubGrid", &DDAGridsCreator::sizeOfSubGrid, 4, 128);
+            ImGui::Text("numberOfTrianglesMultiplier:");
+            ImGui::SliderFloat("##numberOfTrianglesMultiplier", &DDAGridsCreator::numberOfTrianglesMultiplier, 0.5f, 100.f);
+            ImGui::Text("maxModelsGridResolution:");
+            ImGui::SliderInt("##maxModelsGridResolution", &DDAGridsCreator::maxModelsGridResolution, 64, 8192);
+            ImGui::Text("sizeOfSubGrid:");
+            ImGui::SliderInt("##sizeOfSubGrid", &DDAGridsCreator::sizeOfSubGrid, 4, 128);
             ImGui::Separator();
             for (auto&[name, scene] : scenes) {
                 if (ImGui::Button(name.c_str())) {
