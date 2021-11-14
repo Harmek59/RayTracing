@@ -35,5 +35,5 @@ private:
 
     void remove();
 
-    GLuint frameBufferID;
+    GLuint frameBufferID = 0;
 };
