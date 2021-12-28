@@ -4,7 +4,8 @@
 
 class TextureInterface {
 public:
-    TextureInterface();
+    enum class Construction {Create, NoCreate};
+    TextureInterface(Construction construction = Construction::Create);
 
     virtual ~TextureInterface();
 

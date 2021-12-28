@@ -1,3 +1,0 @@
-#wiem:
-C:/Users/ph025/Desktop/starWars.obj 0. -50. -150. 150. 150. 150. 0. 0. 0. 0
-#../Resources/meshes/starWars.obj 0. -50. -150. 150. 150. 150. 0. 0. 0. 0

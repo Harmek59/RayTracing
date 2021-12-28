@@ -5,6 +5,9 @@
 #include <utility>
 #include <iostream>
 
+Texture2D::Texture2D() : TextureInterface(TextureInterface::Construction::NoCreate) {
+}
+
 Texture2D::Texture2D(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                      unsigned char *data) {
     setTextureParameters();

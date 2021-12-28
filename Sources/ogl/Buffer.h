@@ -2,6 +2,9 @@
 
 #include <glad/glad.h>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
 
 class Buffer {
 public:
@@ -29,6 +32,39 @@ public:
     void unMap(GLenum bufferTarget);
 
     void bindBufferBase(GLenum target, GLuint bindingIndex);
+
+    template<typename DataType>
+    void createShaderStorageBuffer(DataType &data, uint32_t bindingBlock) {
+        using Type = typename DataType::value_type;
+        (*this) = Buffer(data.size() * sizeof(Type), GL_DYNAMIC_DRAW);
+        bind(GL_SHADER_STORAGE_BUFFER);
+        Type *dataPtr = (Type *) mapBuffer(GL_SHADER_STORAGE_BUFFER,
+                                                GL_WRITE_ONLY | GL_MAP_INVALIDATE_BUFFER_BIT);
+        if (!dataPtr) {
+            throw std::runtime_error("Buffer createShaderStorageBuffer: mapping buffer failed");
+        }
+        std::memcpy(dataPtr, data.data(), data.size() * sizeof(Type));
+
+        unMap(GL_SHADER_STORAGE_BUFFER);
+        unBind();
+
+        bindBufferBase(GL_SHADER_STORAGE_BUFFER, bindingBlock);
+    }
+
+    template<typename DataType>
+    void updateShaderStorageBufferData(DataType &data) {
+        using Type = typename DataType::value_type;
+        bind(GL_SHADER_STORAGE_BUFFER);
+        Type *dataPtr = (Type *) mapBuffer(GL_SHADER_STORAGE_BUFFER,
+                                           GL_WRITE_ONLY | GL_MAP_INVALIDATE_BUFFER_BIT);
+        if (!dataPtr) {
+            throw std::runtime_error("Buffer updateShaderStorageBuffer: mapping buffer failed");
+        }
+        std::memcpy(dataPtr, data.data(), data.size() * sizeof(Type));
+
+        unMap(GL_SHADER_STORAGE_BUFFER);
+        unBind();
+    }
 
 private:
     void create();

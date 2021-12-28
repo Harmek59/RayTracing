@@ -1,0 +1,4 @@
+../Resources/meshes/sphere.obj -25. -30. -100. 50. 50. 50. 0. 0. 0. 4
+../Resources/meshes/wooden_crate.obj -80. -30. -300. 50. 50. 50. 45. 45. 45. 3
+../Resources/meshes/barrel.obj 60. -30. -300. 50. 50. 50. 0. 0. 0. 2
+../Resources/meshes/skeleton.obj -25. -30. -300. 100. 100. 100. 0. 0. 0. 5

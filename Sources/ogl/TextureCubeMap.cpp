@@ -5,6 +5,9 @@
 #include <utility>
 #include <iostream>
 
+TextureCubeMap::TextureCubeMap() : TextureInterface(TextureInterface::Construction::NoCreate) {
+}
+
 TextureCubeMap::TextureCubeMap(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
                                const std::array<uint8_t *, 6> &data) {
     setTextureParameters();
@@ -15,7 +18,6 @@ TextureCubeMap::TextureCubeMap(const std::array<std::string, 6> &fileNameArr) {
     setTextureParameters();
     loadDataFromFile(fileNameArr);
 }
-
 
 
 void TextureCubeMap::setTextureParameters() {
@@ -47,7 +49,6 @@ void TextureCubeMap::bind() {
 void TextureCubeMap::unBind() {
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 }
-
 
 
 void TextureCubeMap::loadDataFromFile(const std::array<std::string, 6> &fileNameArr) {

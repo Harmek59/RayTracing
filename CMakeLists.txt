@@ -16,7 +16,7 @@ find_path(STB_INCLUDE_DIRS "stb.h")
 find_package(tinyobjloader CONFIG REQUIRED)
 
 #----------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES Sources/*.cpp)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS Sources/*.cpp)
 include_directories(${PROJECT_SOURCE_DIR}/Sources/include ${PROJECT_SOURCE_DIR}/Sources/core ${PROJECT_SOURCE_DIR}/Sources/ogl ${PROJECT_SOURCE_DIR}/Sources/app)
 add_executable(${PROJECT_NAME} Sources/main.cpp ${SOURCES})
 

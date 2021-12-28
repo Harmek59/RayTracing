@@ -16,18 +16,14 @@ public:
     virtual void draw(const Scene &scene) override {
         DisplayModeRasterization::draw(scene);
 
-        //TODO fix bug: szkieletowi wysteje kilka celli z dloni
         gridShader->use();
 
-        gridShader->setMat4("projectionMatrix",
-                            Core::getCamera().getProjectionMatrix());
-
         for (const auto &model: scene.getModels()) {
-            gridShader->setInt("modelDataIndex", model.modelDataIndex);
+            gridShader->setInt("modelDataIndex", model.getModelDataIndex());
             auto beginEndGridsIdx = model.getGridsBeginEndIndexes();
             for (auto gridIdx = beginEndGridsIdx.first; gridIdx < beginEndGridsIdx.second; gridIdx++) {
                 auto gridsNumber =
-                        GridDDA::gridDataArray[gridIdx].cellsEndIndex - GridDDA::gridDataArray[gridIdx].cellsBeginIndex;
+                        GridDDA::getGridDataArray()[gridIdx].cellsEndIndex - GridDDA::getGridDataArray()[gridIdx].cellsBeginIndex;
                 gridShader->setInt("gridDataIndex", gridIdx);
                 glDrawArrays(GL_POINTS, 0, gridsNumber);
             }
@@ -44,7 +40,7 @@ private:
     }
 
     std::unique_ptr<GLSLShader> gridShader;
-    std::string gridVertShaderPath = "../Resources/shaders/rasterization/grid.vert";
-    std::string gridGeomShaderPath = "../Resources/shaders/rasterization/pointToCube.geom";
-    std::string gridFragShaderPath = "../Resources/shaders/rasterization/onlyColor.frag";
+    std::string gridVertShaderPath = "../Sources/shaders/grid.vert";
+    std::string gridGeomShaderPath = "../Sources/shaders/pointToCube.geom";
+    std::string gridFragShaderPath = "../Sources/shaders/onlyColor.frag";
 };

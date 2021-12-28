@@ -42,6 +42,29 @@ Camera &Core::getCamera() {
     return camera;
 }
 
+void GLAPIENTRY debugMessageCallback(GLenum source,
+                                     GLenum type,
+                                     GLuint id,
+                                     GLenum severity,
+                                     GLsizei length,
+                                     const GLchar *message,
+                                     const void *userParam) {
+    if (type != GL_DEBUG_TYPE_OTHER) {
+        fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+                (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : std::to_string(int(type)).c_str()),
+                type, severity, message);
+    }
+}
+
+void Core::enableDebugMessages() {
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(debugMessageCallback, 0);
+}
+
+void Core::disableDebugMessages() {
+
+}
+
 void Core::enableFaceCulling() {
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
@@ -130,12 +153,13 @@ void Core::disableVsync() {
     glfwSwapInterval(0);
 }
 
-void Core::captureMouse(){
+void Core::captureMouse() {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
     glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     mouseCaptured = true;
 }
-void Core::releaseMouse(){
+
+void Core::releaseMouse() {
     ImGui::GetIO().ConfigFlags ^= ImGuiConfigFlags_NoMouse;
     glfwSetInputMode(oglHandler->getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     mouseCaptured = false;

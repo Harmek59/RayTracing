@@ -34,6 +34,9 @@ public:
 
     static float getDeltaTime();
 
+    static void enableDebugMessages();
+    static void disableDebugMessages();
+
     static void enableVsync();
     static void disableVsync();
 

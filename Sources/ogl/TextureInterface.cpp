@@ -1,8 +1,10 @@
 #include "TextureInterface.h"
 #include <utility>
 
-TextureInterface::TextureInterface(){
-    create();
+TextureInterface::TextureInterface(Construction construction){
+    if(construction == Construction::Create){
+        create();
+    }
 }
 
 TextureInterface::~TextureInterface() {

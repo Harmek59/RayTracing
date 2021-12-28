@@ -7,6 +7,8 @@
 
 class Texture2D : public TextureInterface {
 public:
+    Texture2D();
+
     Texture2D(uint32_t width, uint32_t height, GLint internalformat, GLenum format, GLenum type,
               unsigned char *data = nullptr);
 

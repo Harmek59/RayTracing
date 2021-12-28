@@ -16,10 +16,8 @@ public:
         DisplayModeRasterization::draw(scene);
 
         aabbShader->use();
-        aabbShader->setMat4("projectionMatrix",
-                            Core::getCamera().getProjectionMatrix());
         for (const auto &model: scene.getModels()) {
-            aabbShader->setInt("modelDataIndex", model.modelDataIndex);
+            aabbShader->setInt("modelDataIndex", model.getModelDataIndex());
             glDrawArrays(GL_POINTS, 0, model.getNumberOfGrids());
         }
     }
@@ -34,7 +32,7 @@ private:
     }
 
     std::unique_ptr<GLSLShader> aabbShader;
-    std::string aabbVertShaderPath = "../Resources/shaders/aabb.vert";
-    std::string aabbGeomShaderPath = "../Resources/shaders/rasterization/pointToCube.geom";
-    std::string aabbFragShaderPath = "../Resources/shaders/rasterization/onlyColor.frag";
+    std::string aabbVertShaderPath = "../Sources/shaders/aabb.vert";
+    std::string aabbGeomShaderPath = "../Sources/shaders/pointToCube.geom";
+    std::string aabbFragShaderPath = "../Sources/shaders/onlyColor.frag";
 };
