@@ -95,14 +95,14 @@ layout (binding = 5) uniform SCENE_SETTINGS{
     uint beginOfModelsAndGrids;
     uint endOfModelsAndGrids;
 };
-layout (binding = 6) uniform GLOBAL_SETTINGS{
+layout (std140, binding = 6) uniform GLOBAL_SETTINGS{
     mat4 viewMatrix;
     mat4 inverseViewMatrix;
     mat4 projectionMatrix;
     mat4 lightSpaceMatrix;
-    vec3 cameraPosition;
+    vec4 cameraPosition;
+    vec4 pointLightPosition;
     float fov;
-    vec3 pointLightPosition;
     float pointLightRange;
 
     int recursionDepth;
@@ -194,8 +194,6 @@ void main()
             break;
         }
     }
-
-
     color = vec3(1.0) - exp(-color * exposure);
     color = pow(color, vec3(1.0 / gamma));
 
@@ -213,7 +211,7 @@ Ray createFirstRay()
     float pixelCamera_x = (2. * (pixel_coords.x + 0.5) / float(imageWidth) - 1.) * imageAspectRatio * fov_scale;
     float pixelCamera_y = (1. - 2. * (pixel_coords.y + 0.5) / float(imageHeight)) * fov_scale;
 
-    vec3 position = cameraPosition;
+    vec3 position = cameraPosition.xyz;
     vec3 direction = (inverseViewMatrix * vec4(vec3(pixelCamera_x, pixelCamera_y, -1.), 1.0)).xyz;
 
     direction = normalize(direction - position);//subtrack cameraPosition because we have position saved in position variable and adding position of camera to direction would mess up direcion vectors
@@ -278,7 +276,7 @@ HitPoint trace(Ray ray){
         intersectFloorPlane(ray, bestHit);
     }
     Sphere lightSphere;
-    lightSphere.position = pointLightPosition;
+    lightSphere.position = pointLightPosition.xyz;
     lightSphere.radius = 2.;
     lightSphere.material = 0;
     intersectRaySphere(ray, lightSphere, bestHit);
@@ -320,7 +318,7 @@ float ShadowCalculationCubeMap(vec3 fragPos, vec3 lightPos)
     float shadow = 0.0;
     float bias = 0.15;
     int samples = 20;
-    float viewDistance = length(cameraPosition - fragPos);
+    float viewDistance = length(cameraPosition.xyz - fragPos);
     float diskRadius = (1.0 + (viewDistance / pointLightRange))/ 2.f;
     for (int i = 0; i < samples; ++i)
     {
@@ -341,7 +339,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 positionVec, vec3 normalVec
     float closestDepth = texture(shadowMap, projCoords.xy).r;
     float currentDepth = projCoords.z;
     vec3 normal = normalize(normalVec);
-    vec3 lightPos = cameraPosition;
+    vec3 lightPos = cameraPosition.xyz;
     lightPos.y = 300;
     lightPos = vec3(0., 300., 0.);
     vec3 lightDir = normalize(lightPos - positionVec);
@@ -400,7 +398,7 @@ vec3 shade(Ray ray, HitPoint bestHit){
         }
         if (true)
         {
-            vec3 lightDir = normalize(pointLightPosition - bestHit.position);
+            vec3 lightDir = normalize(pointLightPosition.xyz - bestHit.position);
             vec3 lightColor = vec3(100.0);
             vec3 diffuse = max(dot(bestHit.normal, lightDir), 0.0) * Diffuse * lightColor;
             // specular
@@ -408,13 +406,13 @@ vec3 shade(Ray ray, HitPoint bestHit){
             float spec = pow(max(dot(bestHit.normal, halfwayDir), 0.0), 16.0);
             vec3 specular = lightColor * spec * Specular;
             // attenuation
-            float distance = length(pointLightPosition - bestHit.position);
+            float distance = length(pointLightPosition.xyz - bestHit.position);
             float lightLinear = 0.1;
             float lightQuadratic = 0.02;
             float attenuation = 1.0 / (1.0 + lightLinear * distance + lightQuadratic * distance * distance);
             diffuse *= attenuation;
             specular *= attenuation;
-            float shadow = (1. - ShadowCalculationCubeMap(bestHit.position, pointLightPosition));
+            float shadow = (1. - ShadowCalculationCubeMap(bestHit.position, pointLightPosition.xyz));
             color += shadow * (ambient + diffuse + specular);
         }
         return color;

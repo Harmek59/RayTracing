@@ -7,8 +7,10 @@ struct GlobalSettings {
     glm::mat4 projectionMatrix;
     glm::mat4 lightSpaceMatrix;
     glm::vec3 cameraPosition;
-    float fov = 45.;
+    float offset1;
     glm::vec3 pointLightPosition;
+    float offset2;
+    float fov = 45.;
     float pointLightRange;
 
     int recursionDepth;
