@@ -23,6 +23,7 @@ public:
             ImGui::SliderInt("Tree layer", &treeLayer, -1, 10);
             ImGui::Separator();
         }
+        ImGui::End();
         DisplayModeRasterization::draw(scene);
 
         treeShader->use();

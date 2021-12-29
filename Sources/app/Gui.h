@@ -157,15 +157,15 @@ public:
                 ImGui::SliderFloat("Position x", &model.getPositionRef().x, -500.f, 500.f);
                 ImGui::SliderFloat("Position y", &model.getPositionRef().y, -500.f, 500.f);
                 ImGui::SliderFloat("Position z", &model.getPositionRef().z, -500.f, 500.f);
-                ImGui::Text("");
+                ImGui::Text(" ");
                 ImGui::SliderFloat("Scale x", &model.getScaleRef().x, 0.f, 500.f);
                 ImGui::SliderFloat("Scale y", &model.getScaleRef().y, 0.f, 500.f);
                 ImGui::SliderFloat("Scale z", &model.getScaleRef().z, 0.f, 500.f);
-                ImGui::Text("");
+                ImGui::Text(" ");
                 ImGui::SliderFloat("Rotation x", &model.getRotationRef().x, -180.f, 180.f);
                 ImGui::SliderFloat("Rotation y", &model.getRotationRef().y, -180.f, 180.f);
                 ImGui::SliderFloat("Rotation z", &model.getRotationRef().z, -180.f, 180.f);
-                ImGui::Text("");
+                ImGui::Text(" ");
                 if (model.getDrawRef()) {
                     if (ImGui::Button("Hide")) {
                         model.getDrawRef() = false;

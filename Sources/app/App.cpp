@@ -98,8 +98,6 @@ void App::run() {
 
         currDisplayMode->draw(*currScene);
 
-
-        ImGui::End();
         Core::postFrameLogic();
     }
 }

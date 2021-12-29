@@ -56,16 +56,17 @@ ivec3 cellsIndexTo3D(uint idx, ivec3 gridResolution) {
     return ivec3(x, y, z);
 }
 out vec3 color;
-
 out vec3 cellSize;
-
 out mat4 modelViewProjectionMatrix;
+out int skip;
 
 void main(){
     mat4 modelMatrix = modelData[modelDataIndex].positionMatrix * modelData[modelDataIndex].rotationMatrix * modelData[modelDataIndex].scaleMatrix;
     modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
     GridData grid = gridData[gridDataIndex];
+
+    skip = 0;
 
     cellSize = grid.cellSize;
 
