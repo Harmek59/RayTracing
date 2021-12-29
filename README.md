@@ -1,5 +1,6 @@
 ## Ray tracing demo
-
+![plot](./Examples/example1.png)
+![plot](./Examples/example2.png)
 ### Requirements
 
 - C++ 17
