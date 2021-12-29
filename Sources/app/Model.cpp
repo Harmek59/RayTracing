@@ -39,7 +39,6 @@ void Model::updateModelData() {
 std::tuple<TriangleMesh, std::vector<GridDDA::GridData>, std::vector<GridDDA::Cell>, std::vector<uint32_t>>
 Model::loadObjMesh(const std::string &path, glm::vec3 position, glm::vec3 multiplier, uint32_t materialID) {
 
-    std::cout << "========================================\n";
     std::cout << "Loading obj mesh: " << path << '\n';
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;

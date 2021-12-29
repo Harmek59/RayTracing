@@ -18,8 +18,8 @@ App::App() {
     Core::setUp();
     Core::enableDepthTest();
     Core::disableVsync();
-    Core::enableDebugMessages();
     Core::captureMouse();
+//    Core::enableDebugMessages();
 //    Core::enableVsync();
 
     gui = std::make_unique<Gui>();
@@ -64,9 +64,6 @@ App::App() {
 
     globSettBuffer = Buffer{sizeof(GlobalSettings), GL_DYNAMIC_DRAW};
     globSettBuffer.bindBufferBase(GL_UNIFORM_BUFFER, 6);
-
-    Core::disableDebugMessages();
-
 }
 
 void App::run() {

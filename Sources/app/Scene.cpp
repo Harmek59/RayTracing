@@ -3,7 +3,8 @@
 
 void Scene::setUp(const std::string &path) {
     sceneData.beginOfModelsAndGrids = uint32_t(GridDDA::getGridDataArray().size());
-    std::cout << "Loading scene:\n";
+    std::cout << "========================================\n";
+    std::cout << "Loading scene: " << path << "\n";
     std::ifstream sceneFile(path);
     if (sceneFile.is_open()) {
         int lastOriginalIdx = -1; // last one which is not instance of previous
