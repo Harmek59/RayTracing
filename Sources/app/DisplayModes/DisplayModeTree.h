@@ -21,6 +21,7 @@ public:
         ImGui::Begin("Scene");
         {
             ImGui::SliderInt("Tree layer", &treeLayer, -1, 10);
+            ImGui::NewLine();
             ImGui::Separator();
         }
         ImGui::End();

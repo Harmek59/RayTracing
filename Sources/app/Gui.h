@@ -66,11 +66,7 @@ public:
                     ImGui::Text("%s", oglErr.c_str());
                     ImGui::PopStyleColor();
 
-                    static bool showDemoWindow = false;
-                    ImGui::Checkbox("DemoWindow", &showDemoWindow);
-                    if (showDemoWindow) {
-                        ImGui::ShowDemoWindow();
-                    }
+                    ImGui::NewLine();
                     if (ImGui::Button("Reload shaders")) {
                         displayMode->reloadShaders();
                     }
@@ -129,13 +125,17 @@ public:
             ImGui::SliderInt("##maxModelsGridResolution", &DDAGridsCreatorAndSplitter::maxModelsGridResolution, 64, 8192);
             ImGui::Text("sizeOfSubGrid:");
             ImGui::SliderInt("##sizeOfSubGrid", &DDAGridsCreatorAndSplitter::sizeOfSubGrid, 4, 128);
+            ImGui::NewLine();
             ImGui::Separator();
+            ImGui::NewLine();
             for (auto&[name, scene] : scenes) {
                 if (ImGui::Button(name.c_str())) {
                     currScene = scene;
                 }
             }
+            ImGui::NewLine();
             ImGui::Separator();
+            ImGui::NewLine();
 
             static int selectedModel = 0;
             if (ImGui::BeginCombo("##combo", std::to_string(
@@ -157,15 +157,15 @@ public:
                 ImGui::SliderFloat("Position x", &model.getPositionRef().x, -500.f, 500.f);
                 ImGui::SliderFloat("Position y", &model.getPositionRef().y, -500.f, 500.f);
                 ImGui::SliderFloat("Position z", &model.getPositionRef().z, -500.f, 500.f);
-                ImGui::Text(" ");
+                ImGui::NewLine();
                 ImGui::SliderFloat("Scale x", &model.getScaleRef().x, 0.f, 500.f);
                 ImGui::SliderFloat("Scale y", &model.getScaleRef().y, 0.f, 500.f);
                 ImGui::SliderFloat("Scale z", &model.getScaleRef().z, 0.f, 500.f);
-                ImGui::Text(" ");
+                ImGui::NewLine();
                 ImGui::SliderFloat("Rotation x", &model.getRotationRef().x, -180.f, 180.f);
                 ImGui::SliderFloat("Rotation y", &model.getRotationRef().y, -180.f, 180.f);
                 ImGui::SliderFloat("Rotation z", &model.getRotationRef().z, -180.f, 180.f);
-                ImGui::Text(" ");
+                ImGui::NewLine();
                 if (model.getDrawRef()) {
                     if (ImGui::Button("Hide")) {
                         model.getDrawRef() = false;
@@ -177,13 +177,17 @@ public:
                 }
 
             }
+            ImGui::NewLine();
             ImGui::Separator();
+            ImGui::NewLine();
             ImGui::Text("Point light:");
             ImGui::SliderFloat("Position x##lightPos", &currScene->getPointLightPositionRef().x, -500.f, 500.f);
             ImGui::SliderFloat("Position y##lightPos", &currScene->getPointLightPositionRef().y, -500.f, 500.f);
             ImGui::SliderFloat("Position z##lightPos", &currScene->getPointLightPositionRef().z, -500.f, 500.f);
             ImGui::SliderFloat("Range##lightPos", &currScene->getPointLightRageRef(), 0.f, 1000.f);
+            ImGui::NewLine();
             ImGui::Separator();
+            ImGui::NewLine();
         }
         ImGui::End();
     }
